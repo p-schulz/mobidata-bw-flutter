@@ -1,0 +1,15 @@
+{
+  "name": "mobidata-bff",
+  "version": "0.1.0",
+  "description": "Minimaler Backend-BFF für MobiData BW ParkAPI mit Radius-Filter",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.0",
+    "cors": "^2.8.5"
+  }
+}
+
