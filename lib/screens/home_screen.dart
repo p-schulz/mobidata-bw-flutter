@@ -29,6 +29,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  bool _drawerShownOnce = false;
+  bool _showDrawerHint = true;
+
   final MapController _mapController = MapController();
   final MobiDataApi _api = MobiDataApi();
 
@@ -47,6 +51,22 @@ class _HomeScreenState extends State<HomeScreen> {
   // parkplätze
   ParkingSite? _selectedSite;
   bool _showOnlyAvailable = false;
+
+  // carsharing
+
+  // bikesharing
+
+  // scooter
+
+  // transit
+
+  // charging
+
+  // construction
+
+  // bicycle network
+
+
 
   // super
   @override
@@ -123,43 +143,6 @@ class _HomeScreenState extends State<HomeScreen> {
       // kartenbegrenzung
       final b = _currentBounds();
 
-      // filtern
-      /*
-      final filtered = _sites.where((s) {
-        if (s.lat == null || s.lon == null) return false;
-
-
-        if (!(s.lat! >= b.south &&
-            s.lat! <= b.north &&
-            s.lon! >= b.west &&
-            s.lon! <= b.east)) {
-          return false;
-        }
-
-
-        if (_showOnlyAvailable) {
-          if (!(s.availableSpaces != null && s.availableSpaces! > 0)) {
-            return false;
-          }
-        }
-
-        return s.lat! >= b.south &&
-            s.lat! <= b.north &&
-            s.lon! >= b.west &&
-            s.lon! <= b.east;
-
-      }).toList();
-*/
-      /*
-      final filtered = allSites.where((s) {
-        if (s.lat == null || s.lon == null) return false;
-        return s.lat! >= b.south &&
-            s.lat! <= b.north &&
-            s.lon! >= b.west &&
-            s.lon! <= b.east;
-      }).toList();
-      */
-
       final filtered = allSites.where((s) {
         if (s.lat == null || s.lon == null) return false;
 
@@ -195,24 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
-  /*
-  Color _statusColor(ParkingSite s) {
-    if (s.temporarilyClosed == true || s.isOpenNow == false) {
-      return Colors.grey.shade700;
-    }
-
-    if (s.totalSpaces != null && s.availableSpaces != null) {
-      if (s.availableSpaces! > 0) {
-        return Colors.green.shade700; // freie Plätze vorhanden
-      } else if (s.availableSpaces == 0 && s.totalSpaces! > 0) {
-        return Colors.red.shade700;   // voll
-      }
-    }
-
-    // Fallback
-    return Colors.blue.shade700;
-  }
-  */
 
   Color _statusColor(ParkingSite s) {
     switch (s.status) {
@@ -392,7 +357,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
         ],
       ),
-      
+
     );
   }
 
@@ -498,6 +463,19 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
+
+            if (_showDrawerHint)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                child: _DrawerHint(
+                  onClose: () {
+                    setState(() {
+                      _showDrawerHint = false;
+                    });
+                  },
+                ),
+              ),
+
             // Kategorien-Liste
             Expanded(
               child: ListView(
@@ -529,6 +507,48 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+}
+
+class _DrawerHint extends StatelessWidget {
+  final VoidCallback onClose;
+
+  const _DrawerHint({required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      color: Colors.amber.shade50,
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.swipe_right_alt,
+                color: theme.colorScheme.primary, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Wähle hier die Datensatzkategorie.\n'
+                    'Aktuell ist nur „Parkplätze“ aktiv.',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+            IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              icon: const Icon(Icons.close, size: 18),
+              onPressed: onClose,
+              tooltip: 'Hinweis ausblenden',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 
@@ -690,8 +710,9 @@ class _ParkingSheet extends StatelessWidget {
             const SizedBox(height: 8),
             if (site.availableSpaces != null) Text('Kapazität: ${site.availableSpaces}'),
             if (site.status != null) Text('Status: ${site.status}'),
+            if (site.roadName != null) Text('Adresse: ${site.roadName}'),
             if (site.lat != null && site.lon != null)
-              Text('Position: ${site.lat!.toStringAsFixed(5)}, ${site.lon!.toStringAsFixed(5)}'),
+              Text('Location: ${site.lat!.toStringAsFixed(5)}, ${site.lon!.toStringAsFixed(5)}'),
             const SizedBox(height: 12),
             Row(
               children: [

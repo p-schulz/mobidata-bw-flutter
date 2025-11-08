@@ -10,6 +10,7 @@ class ParkingSite {
   final bool? isOpenNow;         // isOpenNow
   final bool? temporarilyClosed; // temporaryClosed
   final bool? freeParking;       // freeParking
+  final String? roadName;             // name of the road
   final String? occupancyTrend;  // occupancyTrend
   final String? type;            // carPark, etc.
   final String? url;             // urlLinkAddress
@@ -29,6 +30,7 @@ class ParkingSite {
     this.isOpenNow,
     this.temporarilyClosed,
     this.freeParking,
+    this.roadName,
     this.occupancyTrend,
     this.type,
     this.url,
@@ -39,6 +41,7 @@ class ParkingSite {
     try {
       double? lat;
       double? lon;
+      String? roadName;
 
       // DATEX-II: locationAndDimension.coordinatesForDisplay.latitude/longitude
       final loc = j['locationAndDimension'];
@@ -47,6 +50,10 @@ class ParkingSite {
         if (coords is Map<String, dynamic>) {
           lat = _toDouble(coords['latitude']);
           lon = _toDouble(coords['longitude']);
+        }
+        final road = loc['roadName'];
+        if (road is String) {
+          roadName = 'Unknown';
         }
       }
 
@@ -63,9 +70,14 @@ class ParkingSite {
 
       lat ??= _toDouble(j['lat'] ?? j['latitude']);
       lon ??= _toDouble(j['lon'] ?? j['lng'] ?? j['longitude']);
+      roadName = j['address']?.toString();
 
       if (lat == null || lon == null) {
         return null;
+      }
+
+      if (roadName == null) {
+        roadName = 'Unknown';
       }
 
       final id = (j['_id'] ?? j['id'] ?? j['uuid'] ?? j['identifier'] ?? '')
@@ -110,6 +122,7 @@ class ParkingSite {
         isOpenNow: isOpenNow,
         temporarilyClosed: temporarilyClosed,
         freeParking: freeParking,
+        roadName : roadName,
         occupancyTrend: occupancyTrend,
         type: type,
         url: url,
