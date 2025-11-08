@@ -1,18 +1,38 @@
 class ParkingSite {
   final String id;
   final String name;
+
   final double? lat;
   final double? lon;
-  final int? capacity;
-  final String? state;
+
+  final int? totalSpaces;        // numberOfSpaces
+  final int? availableSpaces;    // availableSpaces (total)
+  final bool? isOpenNow;         // isOpenNow
+  final bool? temporarilyClosed; // temporaryClosed
+  final bool? freeParking;       // freeParking
+  final String? occupancyTrend;  // occupancyTrend
+  final String? type;            // carPark, etc.
+  final String? url;             // urlLinkAddress
+  final DateTime? lastUpdate;    // lastUpdate
+
+  /// state: 'free', 'full', 'closed', 'unknown'
+  final String status;
 
   ParkingSite({
     required this.id,
     required this.name,
-    required this.lat,
-    required this.lon,
-    this.capacity,
-    this.state,
+    required this.status,
+    this.lat,
+    this.lon,
+    this.totalSpaces,
+    this.availableSpaces,
+    this.isOpenNow,
+    this.temporarilyClosed,
+    this.freeParking,
+    this.occupancyTrend,
+    this.type,
+    this.url,
+    this.lastUpdate,
   });
 
   static ParkingSite? fromJson(Map<String, dynamic> j) {
@@ -20,18 +40,27 @@ class ParkingSite {
       double? lat;
       double? lon;
 
-      final geom = j['geometry'];
-
-      // GeoJSON
-      if (geom is Map && geom['type'] == 'Point') {
-        final coords = geom['coordinates'];
-        if (coords is List && coords.length >= 2) {
-          lon = (coords[0] as num).toDouble();
-          lat = (coords[1] as num).toDouble();
+      // DATEX-II: locationAndDimension.coordinatesForDisplay.latitude/longitude
+      final loc = j['locationAndDimension'];
+      if (loc is Map<String, dynamic>) {
+        final coords = loc['coordinatesForDisplay'];
+        if (coords is Map<String, dynamic>) {
+          lat = _toDouble(coords['latitude']);
+          lon = _toDouble(coords['longitude']);
         }
       }
 
-      // einfache Felder lat/lon
+      // Fallback: GeoJSON geometry
+      final geom = j['geometry'];
+      if ((lat == null || lon == null) &&
+          geom is Map<String, dynamic> &&
+          geom['type'] == 'Point' &&
+          geom['coordinates'] is List &&
+          (geom['coordinates'] as List).length >= 2) {
+        lon = _toDouble((geom['coordinates'] as List)[0]);
+        lat = _toDouble((geom['coordinates'] as List)[1]);
+      }
+
       lat ??= _toDouble(j['lat'] ?? j['latitude']);
       lon ??= _toDouble(j['lon'] ?? j['lng'] ?? j['longitude']);
 
@@ -39,24 +68,79 @@ class ParkingSite {
         return null;
       }
 
-      final id = (j['id'] ?? j['uuid'] ?? j['identifier'] ?? '').toString();
-      final name = (j['name'] ?? j['title'] ?? 'Parkplatz').toString();
+      final id = (j['_id'] ?? j['id'] ?? j['uuid'] ?? j['identifier'] ?? '')
+          .toString();
+      final name = (j['name'] ?? j['description'] ?? 'Parkplatz').toString();
 
-      final capacity = _toInt(j['capacity'] ?? j['max_capacity']);
-      final state = j['state']?.toString() ?? j['status']?.toString();
+      final totalSpaces =
+      _toInt(j['numberOfSpaces'] ?? j['capacity'] ?? j['totalSpaces']);
+      final availableSpaces = _toInt(j['availableSpaces']);
+      final isOpenNow = j['isOpenNow'] is bool ? j['isOpenNow'] as bool : null;
+      final temporarilyClosed = j['temporaryClosed'] is bool
+          ? j['temporaryClosed'] as bool
+          : null;
+      final freeParking =
+      j['freeParking'] is bool ? j['freeParking'] as bool : null;
+      final occupancyTrend =
+      j['occupancyTrend'] != null ? j['occupancyTrend'].toString() : null;
+      final type = j['type']?.toString();
+      final url = j['urlLinkAddress']?.toString();
+
+      DateTime? lastUpdate;
+      final lu = j['lastUpdate'];
+      if (lu is String) {
+        lastUpdate = DateTime.tryParse(lu);
+      }
+
+      // state
+      final status = _deriveStatus(
+        totalSpaces: totalSpaces,
+        availableSpaces: availableSpaces,
+        isOpenNow: isOpenNow,
+        temporarilyClosed: temporarilyClosed,
+      );
 
       return ParkingSite(
         id: id,
         name: name,
         lat: lat,
         lon: lon,
-        capacity: capacity,
-        state: state,
+        totalSpaces: totalSpaces,
+        availableSpaces: availableSpaces,
+        isOpenNow: isOpenNow,
+        temporarilyClosed: temporarilyClosed,
+        freeParking: freeParking,
+        occupancyTrend: occupancyTrend,
+        type: type,
+        url: url,
+        lastUpdate: lastUpdate,
+        status: status,
       );
-    } catch (e) {
-      // debug ausgabe?
+    } catch (_) {
       return null;
     }
+  }
+
+  static String _deriveStatus({
+    int? totalSpaces,
+    int? availableSpaces,
+    bool? isOpenNow,
+    bool? temporarilyClosed,
+  }) {
+    if (temporarilyClosed == true || isOpenNow == false) {
+      return 'closed';
+    }
+
+    if (totalSpaces != null && availableSpaces != null) {
+      if (availableSpaces > 0) {
+        return 'free';
+      }
+      if (availableSpaces == 0 && totalSpaces > 0) {
+        return 'full';
+      }
+    }
+
+    return 'unknown';
   }
 
   static double? _toDouble(dynamic v) {
@@ -73,8 +157,7 @@ class ParkingSite {
     if (v is int) return v;
     if (v is num) return v.toInt();
     if (v is String) {
-      final parsed = int.tryParse(v);
-      return parsed;
+      return int.tryParse(v);
     }
     return null;
   }

@@ -9,6 +9,17 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import '../services/mobidata_api.dart';
 import '../models/parking_site.dart';
 
+enum DatasetCategory {
+  parking,
+  carsharing,
+  bikesharing,
+  scooters,
+  transit,
+  charging,
+  construction,
+  bicycleNetwork,
+}
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -17,6 +28,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final MapController _mapController = MapController();
   final MobiDataApi _api = MobiDataApi();
 
@@ -24,23 +36,26 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = false;
   String? _error;
 
-  LatLng _center = const LatLng(48.7758, 9.1829); // test location
-  double _zoom = 13.0;
+  // start location in Tübingen, middle of BW
+  LatLng _center = const LatLng(48.5216, 9.0576);
+  double _zoom = 7.0;
 
-  // nicht jedes mal daten pullen wenn karte bewegt wird
   Timer? _debounce;
 
-  // widget für ausgewählte node
+  DatasetCategory _selectedCategory = DatasetCategory.parking;
+
+  // parkplätze
   ParkingSite? _selectedSite;
-
-  // filter widget
   bool _showOnlyAvailable = false;
-  bool _showOnlyWithCharging = false;
 
+  // super
   @override
   void initState() {
     super.initState();
     _ensureLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scaffoldKey.currentState?.openDrawer();
+    });
   }
 
   @override
@@ -63,25 +78,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final pos = await Geolocator.getCurrentPosition();
       setState(() {
         _center = LatLng(pos.latitude, pos.longitude);
-        _zoom = 18.0;
+        _zoom = 13.0;
       });
       _mapController.move(_center, _zoom);
     } catch (_) {
       // ignorieren
     }
   }
-
-  // test: bounding box
-  /*
-  LatLngBounds _currentBounds() {
-    final center = _center;
-    final delta = 0.05; // roughly 5-6 km radius
-    return LatLngBounds(
-      LatLng(center.latitude - delta, center.longitude - delta),
-      LatLng(center.latitude + delta, center.longitude + delta),
-    );
-  }
-  */
 
   // live karten ausschnitt verwenden
   LatLngBounds _currentBounds() {
@@ -121,12 +124,59 @@ class _HomeScreenState extends State<HomeScreen> {
       final b = _currentBounds();
 
       // filtern
+      /*
+      final filtered = _sites.where((s) {
+        if (s.lat == null || s.lon == null) return false;
+
+
+        if (!(s.lat! >= b.south &&
+            s.lat! <= b.north &&
+            s.lon! >= b.west &&
+            s.lon! <= b.east)) {
+          return false;
+        }
+
+
+        if (_showOnlyAvailable) {
+          if (!(s.availableSpaces != null && s.availableSpaces! > 0)) {
+            return false;
+          }
+        }
+
+        return s.lat! >= b.south &&
+            s.lat! <= b.north &&
+            s.lon! >= b.west &&
+            s.lon! <= b.east;
+
+      }).toList();
+*/
+      /*
       final filtered = allSites.where((s) {
         if (s.lat == null || s.lon == null) return false;
         return s.lat! >= b.south &&
             s.lat! <= b.north &&
             s.lon! >= b.west &&
             s.lon! <= b.east;
+      }).toList();
+      */
+
+      final filtered = allSites.where((s) {
+        if (s.lat == null || s.lon == null) return false;
+
+        if (!(s.lat! >= b.south &&
+            s.lat! <= b.north &&
+            s.lon! >= b.west &&
+            s.lon! <= b.east)) {
+          return false;
+        }
+
+        if (_showOnlyAvailable) {
+          if (!(s.availableSpaces != null && s.availableSpaces! > 0)) {
+            return false;
+          }
+        }
+
+        return true;
       }).toList();
 
       print('[HomeScreen] filtered sites in bbox: ${filtered.length}');
@@ -145,61 +195,45 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     }
   }
-
-  // test, ob daten reinkommen: lade ALLE parkplätze
   /*
-  Future<void> _loadParking() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      print('[HomeScreen] loading parking…');
-      final sites = await _api.fetchParkingSites();
-      print('[HomeScreen] got ${sites.length} sites total');
-
-      // nicht filtern
-      setState(() {
-        _sites = sites;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-      });
-      print('[HomeScreen] error: $e');
-    } finally {
-      setState(() {
-        _loading = false;
-      });
+  Color _statusColor(ParkingSite s) {
+    if (s.temporarilyClosed == true || s.isOpenNow == false) {
+      return Colors.grey.shade700;
     }
+
+    if (s.totalSpaces != null && s.availableSpaces != null) {
+      if (s.availableSpaces! > 0) {
+        return Colors.green.shade700; // freie Plätze vorhanden
+      } else if (s.availableSpaces == 0 && s.totalSpaces! > 0) {
+        return Colors.red.shade700;   // voll
+      }
+    }
+
+    // Fallback
+    return Colors.blue.shade700;
   }
   */
 
+  Color _statusColor(ParkingSite s) {
+    switch (s.status) {
+      case 'free':
+        return Colors.green.shade700;
+      case 'full':
+        return Colors.red.shade700;
+      case 'closed':
+        return Colors.grey.shade700;
+      default:
+        return Colors.blue.shade700;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    /*
-    final markers = _sites.where((s) => s.lat != null && s.lon != null).map((s) {
-      return Marker(
-        width: 40,
-        height: 40,
-        point: LatLng(s.lat!, s.lon!),
-        child: GestureDetector(
-          onTap: () {
-            showModalBottomSheet(
-              context: context,
-              builder: (_) => _ParkingSheet(site: s),
-            );
-          },
-          child: const Icon(Icons.local_parking, size: 32),
-        ),
-      );
-    }).toList();
-    */
-
     final markers = _sites
         .where((s) => s.lat != null && s.lon != null)
         .map((s) {
       final isSelected = _selectedSite?.id == s.id;
+      final color = _statusColor(s);
 
       return Marker(
         width: 36,
@@ -217,9 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: Container(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSelected
-                    ? Colors.orange.shade700
-                    : Colors.blue.shade700,
+                color: isSelected ? Colors.orange.shade700 : color,
                 boxShadow: const [
                   BoxShadow(
                     blurRadius: 4,
@@ -240,10 +272,13 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }).toList();
 
+
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
-        title: const Text('MobiData BW'),
+        title: const Text('MobiData BW in Flutter'),
       ),
+      drawer: _buildMainDrawer(context),
       body: Stack(
         children: [
           FlutterMap(
@@ -263,10 +298,24 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.mobidata_bw_flutter_starter',
+                userAgentPackageName: 'com.example.mobidata_bw_flutter',
               ),
               MarkerLayer(markers: markers),
             ],
+          ),
+
+          // filter
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: _FilterBar(
+              showOnlyAvailable: _showOnlyAvailable,
+              onChangeAvailable: (val) {
+                setState(() => _showOnlyAvailable = val);
+                _loadParking();
+              },
+            ),
           ),
 
           // overlay zum laden
@@ -282,6 +331,34 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+
+          // legende
+          Positioned(
+            bottom: 100,
+            left: 12,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.9),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: const [
+                  Icon(Icons.local_parking, color: Colors.green, size: 18),
+                  SizedBox(width: 4),
+                  Text('frei'),
+                  SizedBox(width: 12),
+                  Icon(Icons.local_parking, color: Colors.red, size: 18),
+                  SizedBox(width: 4),
+                  Text('belegt'),
+                  SizedBox(width: 12),
+                  Icon(Icons.local_parking, color: Colors.blue, size: 18),
+                  SizedBox(width: 4),
+                  Text('unbekannt'),
+                ],
+              ),
+            ),
+          ),
 
           // fehlerbox
           if (_error != null)
@@ -315,17 +392,286 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
         ],
       ),
+      
+    );
+  }
 
-      /*
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _loadParking,
-        icon: const Icon(Icons.download),
-        label: const Text('Parkplätze laden'),
+  Widget _buildCategoryTile(DatasetCategory cat, String label) {
+    final isSelected = _selectedCategory == cat;
+    final isEnabled = cat == DatasetCategory.parking; // aktuell nur Parken aktiv
+
+    IconData icon;
+    switch (cat) {
+      case DatasetCategory.parking:
+        icon = Icons.local_parking;
+        break;
+      case DatasetCategory.carsharing:
+        icon = Icons.directions_car;
+        break;
+      case DatasetCategory.bikesharing:
+        icon = Icons.pedal_bike;
+        break;
+      case DatasetCategory.scooters:
+        icon = Icons.electric_scooter;
+        break;
+      case DatasetCategory.transit:
+        icon = Icons.directions_bus;
+        break;
+      case DatasetCategory.charging:
+        icon = Icons.ev_station;
+        break;
+      case DatasetCategory.construction:
+        icon = Icons.construction;
+        break;
+      case DatasetCategory.bicycleNetwork:
+        icon = Icons.directions_bike;
+        break;
+    }
+
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: isEnabled ? null : Colors.grey,
       ),
-      */
+      title: Text(
+        label,
+        style: TextStyle(
+          color: isEnabled ? null : Colors.grey,
+        ),
+      ),
+      selected: isSelected,
+      enabled: isEnabled,
+      onTap: !isEnabled
+          ? null
+          : () {
+        Navigator.of(context).pop(); // Drawer schließen
+        setState(() {
+          _selectedCategory = cat;
+          // aktuell lädt _loadParking() nur Parkplätze;
+          // später: je nach Kategorie andere Loader aufrufen.
+        });
+        _loadParking();
+      },
+    );
+  }
+
+
+  Widget _buildMainDrawer(BuildContext context) {
+    final theme = Theme.of(context);
+
+    // Kategorien als Anzeige-Namen
+    final items = <DatasetCategory, String>{
+      DatasetCategory.parking: 'Parkplätze',
+      DatasetCategory.carsharing: 'Carsharing',
+      DatasetCategory.bikesharing: 'Bikesharing',
+      DatasetCategory.scooters: 'E-Scooter',
+      DatasetCategory.transit: 'ÖPNV',
+      DatasetCategory.charging: 'Ladeinfrastruktur',
+      DatasetCategory.construction: 'Baustellen',
+      DatasetCategory.bicycleNetwork: 'Radnetz',
+    };
+
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withOpacity(0.9),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'MobiData BW in Flutter',
+                    style: theme.textTheme.titleLarge
+                        ?.copyWith(color: Colors.white),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '(Inoffiziell)',
+                    style: theme.textTheme.bodyMedium
+                        ?.copyWith(color: Colors.white70),
+                  ),
+                ],
+              ),
+            ),
+
+            // Kategorien-Liste
+            Expanded(
+              child: ListView(
+                children: [
+                  for (final entry in items.entries)
+                    _buildCategoryTile(entry.key, entry.value),
+                ],
+              ),
+            ),
+
+            const Divider(height: 1),
+
+            // Impressum / Lizenzen
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Impressum & Lizenzen'),
+              onTap: () {
+                Navigator.of(context).pop(); // Drawer schließen
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => const _ImpressumSheet(),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+}
+
+
+class _ImpressumSheet extends StatelessWidget {
+  const _ImpressumSheet();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.info_outline, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Impressum & Lizenzen',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              Text(
+                'Hinweis',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Diese App ist ein inoffizielles Projekt des Codevember e.V '
+                    'und steht in keinem offiziellen Zusammenhang mit der '
+                    'NVBW Nahverkehrsgesellschaft Baden-Württemberg mbH.',
+              ),
+
+              const SizedBox(height: 16),
+              Text(
+                'MobiData BW in Flutter',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '• MobiData BW – zentrale Daten- und Serviceplattform für Mobilität in Baden-Württemberg.\n'
+                    '• Bereitstellung von Parkdaten (u. a. ParkAPI / DATEX II), '
+                    'teilweise unter der Datenlizenz Deutschland – Namensnennung 2.0 (DL-DE-BY 2.0).',
+              ),
+
+              const SizedBox(height: 16),
+              Text(
+                'Open-Source-Komponenten',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                '• Flutter (Google)\n'
+                    '• flutter_map + OpenStreetMap-Tiles\n'
+                    '• Dio, Geolocator, flutter_spinkit\n'
+                    'Lizenzdetails siehe „Flutter Lizenzen anzeigen“.',
+              ),
+
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () {
+                    showLicensePage(
+                      context: context,
+                      applicationName: 'MobiData BW in Flutter',
+                      applicationVersion: '0.1.0',
+                    );
+                  },
+                  icon: const Icon(Icons.article_outlined),
+                  label: const Text('Flutter-Lizenzen anzeigen'),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Schließen'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
+
+
+class _FilterBar extends StatelessWidget {
+  final bool showOnlyAvailable;
+  final ValueChanged<bool> onChangeAvailable;
+
+  const _FilterBar({
+    required this.showOnlyAvailable,
+    required this.onChangeAvailable,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 4,
+      color: Colors.white.withOpacity(0.9),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                FilterChip(
+                  label: const Text('Freie Parkplätze'),
+                  selected: showOnlyAvailable,
+                  onSelected: onChangeAvailable,
+                  selectedColor: Colors.green.shade200,
+                ),
+              ],
+            ),
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Filter zurücksetzen',
+              onPressed: () {
+                onChangeAvailable(false);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
 class _ParkingSheet extends StatelessWidget {
   final ParkingSite site;
@@ -342,8 +688,8 @@ class _ParkingSheet extends StatelessWidget {
           children: [
             Text(site.name, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            if (site.capacity != null) Text('Kapazität: ${site.capacity}'),
-            if (site.state != null) Text('Status: ${site.state}'),
+            if (site.availableSpaces != null) Text('Kapazität: ${site.availableSpaces}'),
+            if (site.status != null) Text('Status: ${site.status}'),
             if (site.lat != null && site.lon != null)
               Text('Position: ${site.lat!.toStringAsFixed(5)}, ${site.lon!.toStringAsFixed(5)}'),
             const SizedBox(height: 12),
@@ -405,11 +751,11 @@ class _ParkingInfoCard extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 4,
                     children: [
-                      if (site.capacity != null)
-                        Text('Kapazität: ${site.capacity}',
+                      if (site.availableSpaces != null)
+                        Text('Kapazität: ${site.availableSpaces}',
                             style: theme.textTheme.bodySmall),
-                      if (site.state != null)
-                        Text('Status: ${site.state}',
+                      if (site.status != null)
+                        Text('Status: ${site.status}',
                             style: theme.textTheme.bodySmall),
                       if (site.lat != null && site.lon != null)
                         Text(
