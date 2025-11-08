@@ -1,4 +1,4 @@
-# mobidata-bw-flutter
+# mobidata_bw_flutter
 Flutter-App für den mobilen Zugriff auf digitale Mobilitätsdaten von MobiData BW. 
 
 ## Datenquellen und Lizenzen

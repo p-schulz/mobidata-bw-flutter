@@ -1,6 +1,6 @@
 {
-    "name": "mobidata-bw-flutterer",
-    "short_name": "mobidata-bw-flutterer",
+    "name": "mobidata_bw_flutterer",
+    "short_name": "mobidata_bw_flutterer",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

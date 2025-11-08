@@ -30,6 +30,13 @@ class _HomeScreenState extends State<HomeScreen> {
   // nicht jedes mal daten pullen wenn karte bewegt wird
   Timer? _debounce;
 
+  // widget für ausgewählte node
+  ParkingSite? _selectedSite;
+
+  // filter widget
+  bool _showOnlyAvailable = false;
+  bool _showOnlyWithCharging = false;
+
   @override
   void initState() {
     super.initState();
@@ -170,6 +177,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    /*
     final markers = _sites.where((s) => s.lat != null && s.lon != null).map((s) {
       return Marker(
         width: 40,
@@ -183,6 +191,51 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           },
           child: const Icon(Icons.local_parking, size: 32),
+        ),
+      );
+    }).toList();
+    */
+
+    final markers = _sites
+        .where((s) => s.lat != null && s.lon != null)
+        .map((s) {
+      final isSelected = _selectedSite?.id == s.id;
+
+      return Marker(
+        width: 36,
+        height: 36,
+        point: LatLng(s.lat!, s.lon!),
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedSite = s;
+            });
+          },
+          child: AnimatedScale(
+            scale: isSelected ? 1.2 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected
+                    ? Colors.orange.shade700
+                    : Colors.blue.shade700,
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                    color: Color(0x55000000),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(4),
+              child: const Icon(
+                Icons.local_parking,
+                size: 18,
+                color: Colors.white,
+              ),
+            ),
+          ),
         ),
       );
     }).toList();
@@ -202,7 +255,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 _center = pos.center ?? _center;
                 _zoom = pos.zoom ?? _zoom;
 
-                // nur bei benutzer bewegung reagieren
                 if (hasGesture == true) {
                   _onMapMovedDebounced();
                 }
@@ -211,26 +263,32 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.mobidata-bw-flutter',
+                userAgentPackageName: 'com.example.mobidata_bw_flutter_starter',
               ),
               MarkerLayer(markers: markers),
             ],
           ),
+
+          // overlay zum laden
           if (_loading)
-            Positioned.fill(
+            const Positioned.fill(
               child: ColoredBox(
-                color: const Color(0x11000000),
-                child: const Center(
+                color: Color(0x11000000),
+                child: Center(
                   child: SpinKitFadingCircle(
                     size: 48,
-                    color: Colors.white, // oder eine andere Farbe
+                    color: Colors.white,
                   ),
                 ),
               ),
             ),
+
+          // fehlerbox
           if (_error != null)
             Positioned(
-              left: 12, right: 12, bottom: 90,
+              left: 12,
+              right: 12,
+              bottom: 140,
               child: Card(
                 color: Colors.red.shade50,
                 child: Padding(
@@ -239,13 +297,32 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+
+          // info fenster
+          if (_selectedSite != null)
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 24,
+              child: _ParkingInfoCard(
+                site: _selectedSite!,
+                onClose: () {
+                  setState(() {
+                    _selectedSite = null;
+                  });
+                },
+              ),
+            ),
         ],
       ),
+
+      /*
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _loadParking,
         icon: const Icon(Icons.download),
         label: const Text('Parkplätze laden'),
       ),
+      */
     );
   }
 }
@@ -281,6 +358,87 @@ class _ParkingSheet extends StatelessWidget {
                 ),
               ],
             )
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ParkingInfoCard extends StatelessWidget {
+  final ParkingSite site;
+  final VoidCallback onClose;
+
+  const _ParkingInfoCard({
+    required this.site,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Card(
+      elevation: 6,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            const Icon(Icons.local_parking, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    site.name,
+                    style: theme.textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      if (site.capacity != null)
+                        Text('Kapazität: ${site.capacity}',
+                            style: theme.textTheme.bodySmall),
+                      if (site.state != null)
+                        Text('Status: ${site.state}',
+                            style: theme.textTheme.bodySmall),
+                      if (site.lat != null && site.lon != null)
+                        Text(
+                          '${site.lat!.toStringAsFixed(4)}, ${site.lon!.toStringAsFixed(4)}',
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: Colors.grey[600]),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+
+            TextButton(
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  builder: (_) => _ParkingSheet(site: site),
+                );
+              },
+              child: const Text('Details'),
+            ),
+
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: onClose,
+              icon: const Icon(Icons.close),
+              tooltip: 'Schließen',
+            ),
           ],
         ),
       ),
