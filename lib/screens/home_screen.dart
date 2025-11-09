@@ -20,7 +20,7 @@ import '../models/construction_site.dart';
 import '../models/bicycle_network.dart';
 
 import '../widgets/settings_sheet.dart';
-import '../widgets/drawer_main.dart';
+import '../widgets/drawer_hint.dart';
 import '../widgets/imprint_sheet.dart';
 import '../widgets/filter_bar.dart';
 import '../widgets/parking_info_card.dart';
@@ -35,10 +35,6 @@ enum DatasetCategory {
   construction,
   bicycleNetwork,
 }
-
-////////////////////////////////////////
-/// HAUPTSCREEN
-////////////////////////////////////////
 
 class HomeScreen extends StatefulWidget {
   final AppThemeSetting appThemeSetting;
@@ -170,12 +166,6 @@ class _HomeScreenState extends State<HomeScreen> {
       _showDrawerHint = !shown;
     });
   }
-  /*
-  Future<void> _markDrawerHintAsShown() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('drawerHintShown', true);
-  }
-*/
 
   Future<void> _ensureLocation() async {
     try {
