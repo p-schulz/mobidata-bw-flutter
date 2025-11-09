@@ -10,7 +10,7 @@ class ParkingSite {
   final bool? isOpenNow;         // isOpenNow
   final bool? temporarilyClosed; // temporaryClosed
   final bool? freeParking;       // freeParking
-  final String? roadName;             // name of the road
+  final String? roadName;        // name of the road
   final String? occupancyTrend;  // occupancyTrend
   final String? type;            // carPark, etc.
   final String? url;             // urlLinkAddress

@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/mobidata_api.dart';
 import '../models/parking_site.dart';
@@ -20,6 +21,11 @@ enum DatasetCategory {
   bicycleNetwork,
 }
 
+
+////////////////////////////////////////
+/// HAUPTSCREEN
+////////////////////////////////////////
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -30,52 +36,76 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+
+  // settings
   bool _drawerShownOnce = false;
   bool _showDrawerHint = true;
 
+  bool _autoLoadOnMove = true;
+  bool _openDrawerOnStart = true;
+
+  static const _prefsKeyAutoLoadOnMove = 'settings_autoLoadOnMove';
+  static const _prefsKeyOpenDrawerOnStart = 'settings_openDrawerOnStart';
+  static const _prefsKeyDrawerHintShown = 'drawerHintShown';
+
+
+  // daten und karte
   final MapController _mapController = MapController();
   final MobiDataApi _api = MobiDataApi();
 
-  List<ParkingSite> _sites = [];
+  LatLng _center = const LatLng(48.5216, 9.0576);
+  double _zoom = 8.0;
+
   bool _loading = false;
   String? _error;
-
-  // start location in Tübingen, middle of BW
-  LatLng _center = const LatLng(48.5216, 9.0576);
-  double _zoom = 7.0;
-
   Timer? _debounce;
 
   DatasetCategory _selectedCategory = DatasetCategory.parking;
 
   // parkplätze
+  List<ParkingSite> _sites = [];
   ParkingSite? _selectedSite;
   bool _showOnlyAvailable = false;
 
   // carsharing
 
+
   // bikesharing
+
 
   // scooter
 
+
   // transit
+
 
   // charging
 
+
   // construction
+
 
   // bicycle network
 
 
 
-  // super
+  // init
   @override
   void initState() {
     super.initState();
+
     _ensureLocation();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scaffoldKey.currentState?.openDrawer();
+
+    _loadDrawerHintPreference().then((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_drawerShownOnce) {
+          _drawerShownOnce = true;
+          _scaffoldKey.currentState?.openDrawer();
+        }
+      });
     });
+
+    _loadParking();
   }
 
   @override
@@ -83,6 +113,63 @@ class _HomeScreenState extends State<HomeScreen> {
     _debounce?.cancel();
     super.dispose();
   }
+
+
+  // lade einstellungen
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+
+    setState(() {
+      _autoLoadOnMove = prefs.getBool(_prefsKeyAutoLoadOnMove) ?? true;
+      _openDrawerOnStart = prefs.getBool(_prefsKeyOpenDrawerOnStart) ?? true;
+
+      final hintShown = prefs.getBool(_prefsKeyDrawerHintShown) ?? false;
+      _showDrawerHint = !hintShown;
+    });
+  }
+
+
+  Future<void> _setAutoLoadOnMove(bool value) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool(_prefsKeyAutoLoadOnMove, value);
+  setState(() {
+    _autoLoadOnMove = value;
+  });
+}
+
+  Future<void> _setOpenDrawerOnStart(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsKeyOpenDrawerOnStart, value);
+    setState(() {
+      _openDrawerOnStart = value;
+    });
+  }
+
+  Future<void> _markDrawerHintAsShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsKeyDrawerHintShown, true);
+    setState(() {
+      _showDrawerHint = false;
+    });
+  }
+
+  // kleinen hinweis beim ersten start anzeigen
+  Future<void> _loadDrawerHintPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    final shown = prefs.getBool('drawerHintShown') ?? false;
+    setState(() {
+      _showDrawerHint = !shown;
+    });
+  }
+/*
+  Future<void> _markDrawerHintAsShown() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('drawerHintShown', true);
+  }
+*/
+  
+
+
 
   Future<void> _ensureLocation() async {
     try {
@@ -118,11 +205,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // debouncing
   void _onMapMovedDebounced() {
-    // alten Timer abbrechen wenn noch aktiv
+    // alten timer abbrechen wenn noch aktiv
     _debounce?.cancel();
 
     _debounce = Timer(const Duration(milliseconds: 600), () {
-      // nach kurzer ruhepause
+      // kurze ruhepause
       _loadParking();
     });
   }
@@ -192,6 +279,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+
+////////////////////////////////////////
+/// BUILD
+////////////////////////////////////////
+
   @override
   Widget build(BuildContext context) {
     final markers = _sites
@@ -240,26 +332,33 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
+
       appBar: AppBar(
         title: const Text('MobiData BW in Flutter'),
       ),
+
       drawer: _buildMainDrawer(context),
+
+      // karte
       body: Stack(
         children: [
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
               initialCenter: _center,
+              backgroundColor: Colors.grey.shade900,
               initialZoom: _zoom,
               onPositionChanged: (pos, hasGesture) {
                 _center = pos.center ?? _center;
                 _zoom = pos.zoom ?? _zoom;
 
-                if (hasGesture == true) {
+                if (hasGesture == true && _autoLoadOnMove) {
                   _onMapMovedDebounced();
                 }
               },
             ),
+
+            // layer mit markern
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -299,8 +398,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // legende
           Positioned(
-            bottom: 100,
+            bottom: 8,
             left: 12,
+            right: 12,
             child: Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
@@ -355,15 +455,20 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
             ),
+
         ],
       ),
-
     );
   }
 
+  
+////////////////////////////////////////
+/// KATEGORIEN LISTE
+////////////////////////////////////////
+
   Widget _buildCategoryTile(DatasetCategory cat, String label) {
     final isSelected = _selectedCategory == cat;
-    final isEnabled = cat == DatasetCategory.parking; // aktuell nur Parken aktiv
+    final isEnabled = cat == DatasetCategory.parking;
 
     IconData icon;
     switch (cat) {
@@ -409,17 +514,21 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: !isEnabled
           ? null
           : () {
-        Navigator.of(context).pop(); // Drawer schließen
+        Navigator.of(context).pop();
         setState(() {
           _selectedCategory = cat;
-          // aktuell lädt _loadParking() nur Parkplätze;
-          // später: je nach Kategorie andere Loader aufrufen.
+          // aktuell lädt _loadParking() nur parkplätze
         });
         _loadParking();
       },
     );
   }
 
+
+
+////////////////////////////////////////
+/// DRAWER
+////////////////////////////////////////
 
   Widget _buildMainDrawer(BuildContext context) {
     final theme = Theme.of(context);
@@ -463,20 +572,34 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
+            // hinweis
+            /*
+            if (_showDrawerHint)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                child: _DrawerHint(
+                  onClose: () async {
+                    setState(() {
+                      _showDrawerHint = false;
+                    });
+                    await _markDrawerHintAsShown();
+                  },
+                ),
+              ),
+            */
 
             if (_showDrawerHint)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0),
                 child: _DrawerHint(
                   onClose: () {
-                    setState(() {
-                      _showDrawerHint = false;
-                    });
+                    _markDrawerHintAsShown();
                   },
                 ),
               ),
 
-            // Kategorien-Liste
+
+            // kategorien
             Expanded(
               child: ListView(
                 children: [
@@ -488,12 +611,50 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const Divider(height: 1),
 
-            // Impressum / Lizenzen
+            // einstellungen
+            ListTile(
+              leading: const Icon(Icons.settings_outlined),
+              title: const Text('Einstellungen'),
+              onTap: () {
+                Navigator.of(context).pop(); // Drawer schließen
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => _SettingsSheet(
+                    autoLoadOnMove: _autoLoadOnMove,
+                    openDrawerOnStart: _openDrawerOnStart,
+                    onChangeAutoLoadOnMove: (val) {
+                      _setAutoLoadOnMove(val);
+                    },
+                    onChangeOpenDrawerOnStart: (val) {
+                      _setOpenDrawerOnStart(val);
+                    },
+                  ),
+                );
+              },
+            ),
+            
+            /*
+            ListTile(
+              leading: const Icon(Icons.settings_outlined),
+              title: const Text('Einstellungen'),
+              onTap: () {
+                Navigator.of(context).pop();
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => const _SettingsSheet(),
+                );
+              },
+            ),
+            */
+
+            // impressum + lizenzen
             ListTile(
               leading: const Icon(Icons.info_outline),
               title: const Text('Impressum & Lizenzen'),
               onTap: () {
-                Navigator.of(context).pop(); // Drawer schließen
+                Navigator.of(context).pop();
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -501,6 +662,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
+
           ],
         ),
       ),
@@ -509,6 +671,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
 }
 
+
+////////////////////////////////////////
+/// DRAWER HINWEIS
+////////////////////////////////////////
 class _DrawerHint extends StatelessWidget {
   final VoidCallback onClose;
 
@@ -552,6 +718,178 @@ class _DrawerHint extends StatelessWidget {
 }
 
 
+////////////////////////////////////////
+/// EINSTELLUNGEN
+////////////////////////////////////////
+
+class _SettingsSheet extends StatefulWidget {
+  final bool autoLoadOnMove;
+  final bool openDrawerOnStart;
+  final ValueChanged<bool> onChangeAutoLoadOnMove;
+  final ValueChanged<bool> onChangeOpenDrawerOnStart;
+
+  const _SettingsSheet({
+    required this.autoLoadOnMove,
+    required this.openDrawerOnStart,
+    required this.onChangeAutoLoadOnMove,
+    required this.onChangeOpenDrawerOnStart,
+  });
+
+  @override
+  State<_SettingsSheet> createState() => _SettingsSheetState();
+}
+
+class _SettingsSheetState extends State<_SettingsSheet> {
+  late bool _autoLoadOnMove;
+  late bool _openDrawerOnStart;
+
+  @override
+  void initState() {
+    super.initState();
+    _autoLoadOnMove = widget.autoLoadOnMove;
+    _openDrawerOnStart = widget.openDrawerOnStart;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.settings_outlined,
+                      color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Einstellungen',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                    'Parkplätze beim Kartenverschieben automatisch nachladen'),
+                subtitle: const Text(
+                    'Deaktivieren, wenn nur manuell über den Refresh-Button geladen werden soll.'),
+                value: _autoLoadOnMove,
+                onChanged: (val) {
+                  setState(() => _autoLoadOnMove = val);
+                  widget.onChangeAutoLoadOnMove(val); // an HomeScreen weitergeben
+                },
+              ),
+
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text(
+                    'Drawer beim App-Start automatisch öffnen'),
+                value: _openDrawerOnStart,
+                onChanged: (val) {
+                  setState(() => _openDrawerOnStart = val);
+                  widget.onChangeOpenDrawerOnStart(val);
+                },
+              ),
+
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Schließen'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/*
+class _SettingsSheetState extends State<_SettingsSheet> {
+  bool _autoLoadOnMove = true;
+  bool _openDrawerOnStart = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.settings_outlined,
+                      color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Einstellungen',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Parkplätze beim Kartenverschieben automatisch nachladen'),
+                subtitle: const Text(
+                    'Deaktivieren, wenn nur manuell über den Refresh-Button geladen werden soll.'),
+                value: _autoLoadOnMove,
+                onChanged: (val) {
+                  setState(() => _autoLoadOnMove = val);
+                  // todo: SharedPreferences anbinden
+
+                },
+              ),
+
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Drawer beim App-Start automatisch öffnen'),
+                value: _openDrawerOnStart,
+                onChanged: (val) {
+                  setState(() => _openDrawerOnStart = val);
+                  // todo: persistent speichern
+
+                },
+              ),
+
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Schließen'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+*/
+
+////////////////////////////////////////
+/// IPRESSUM
+////////////////////////////////////////
+
 class _ImpressumSheet extends StatelessWidget {
   const _ImpressumSheet();
 
@@ -592,7 +930,7 @@ class _ImpressumSheet extends StatelessWidget {
 
               const SizedBox(height: 16),
               Text(
-                'MobiData BW in Flutter',
+                'Rechtliches und Lizenzen',
                 style: theme.textTheme.titleMedium,
               ),
               const SizedBox(height: 4),
@@ -648,6 +986,10 @@ class _ImpressumSheet extends StatelessWidget {
 }
 
 
+////////////////////////////////////////
+/// FILTER LEISTE
+////////////////////////////////////////
+
 class _FilterBar extends StatelessWidget {
   final bool showOnlyAvailable;
   final ValueChanged<bool> onChangeAvailable;
@@ -693,6 +1035,10 @@ class _FilterBar extends StatelessWidget {
 }
 
 
+////////////////////////////////////////
+/// PARKPLATZ INFO
+////////////////////////////////////////
+
 class _ParkingSheet extends StatelessWidget {
   final ParkingSite site;
   const _ParkingSheet({required this.site});
@@ -712,7 +1058,7 @@ class _ParkingSheet extends StatelessWidget {
             if (site.status != null) Text('Status: ${site.status}'),
             if (site.roadName != null) Text('Adresse: ${site.roadName}'),
             if (site.lat != null && site.lon != null)
-              Text('Location: ${site.lat!.toStringAsFixed(5)}, ${site.lon!.toStringAsFixed(5)}'),
+              Text('Position: ${site.lat!.toStringAsFixed(5)}, ${site.lon!.toStringAsFixed(5)}'),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -731,6 +1077,11 @@ class _ParkingSheet extends StatelessWidget {
     );
   }
 }
+
+
+////////////////////////////////////////
+/// PARKPLATZ DETAILS
+////////////////////////////////////////
 
 class _ParkingInfoCard extends StatelessWidget {
   final ParkingSite site;
