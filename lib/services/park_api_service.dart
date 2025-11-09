@@ -19,7 +19,8 @@ class MobiDataApi {
   static const String _parkEndpoint =
       'https://api.mobidata-bw.de/park-api/api/public/v3/parking-sites';
 
-  Future<List<ParkingSite>> fetchParkingSites({CancelToken? cancelToken}) async {
+  Future<List<ParkingSite>> fetchParkingSites(
+      {CancelToken? cancelToken}) async {
     final res = await _dio.get(
       _parkEndpoint,
       cancelToken: cancelToken,
@@ -39,8 +40,7 @@ class MobiDataApi {
       print('[MobiDataApi] top-level List length: ${data.length}');
       for (final item in data) {
         if (item is! Map) continue;
-        final ps =
-        ParkingSite.fromJson(Map<String, dynamic>.from(item as Map));
+        final ps = ParkingSite.fromJson(Map<String, dynamic>.from(item as Map));
         if (ps != null) out.add(ps);
       }
       print('[MobiDataApi] parsed sites from top-level list: ${out.length}');

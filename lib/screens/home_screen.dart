@@ -19,12 +19,10 @@ import '../models/charging_station.dart';
 import '../models/construction_site.dart';
 import '../models/bicycle_network.dart';
 
-import '../widgets/filter_bar.dart';
 import '../widgets/settings_sheet.dart';
 import '../widgets/drawer_main.dart';
 import '../widgets/imprint_sheet.dart';
 import '../widgets/filter_bar.dart';
-import '../widgets/legend_box.dart';
 import '../widgets/parking_info_card.dart';
 
 enum DatasetCategory {
@@ -172,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _showDrawerHint = !shown;
     });
   }
-/*
+  /*
   Future<void> _markDrawerHintAsShown() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('drawerHintShown', true);
@@ -288,15 +286,16 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-////////////////////////////////////////
+  ////////////////////////////////////////
   /// BUILD
-////////////////////////////////////////
+  ////////////////////////////////////////
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final markers =
-        _sites.where((s) => s.lat != null && s.lon != null).map((s) {
+    final markers = _sites.where((s) => s.lat != null && s.lon != null).map((
+      s,
+    ) {
       final isSelected = _selectedSite?.id == s.id;
       final color = _statusColor(s);
 
@@ -340,9 +339,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       key: _scaffoldKey,
 
-      appBar: AppBar(
-        title: const Text('MobiData BW in Flutter'),
-      ),
+      appBar: AppBar(title: const Text('MobiData BW in Flutter')),
 
       drawer: _buildMainDrawer(context),
 
@@ -383,7 +380,7 @@ class _HomeScreenState extends State<HomeScreen> {
             top: 12,
             left: 12,
             right: 12,
-            child: _FilterBar(
+            child: FilterBar(
               showOnlyAvailable: _showOnlyAvailable,
               onChangeAvailable: (val) {
                 setState(() => _showOnlyAvailable = val);
@@ -398,10 +395,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ColoredBox(
                 color: Color(0x11000000),
                 child: Center(
-                  child: SpinKitFadingCircle(
-                    size: 48,
-                    color: Colors.white,
-                  ),
+                  child: SpinKitFadingCircle(size: 48, color: Colors.white),
                 ),
               ),
             ),
@@ -456,7 +450,7 @@ class _HomeScreenState extends State<HomeScreen> {
               left: 12,
               right: 12,
               bottom: 24,
-              child: _ParkingInfoCard(
+              child: ParkingInfoCard(
                 site: _selectedSite!,
                 onClose: () {
                   setState(() {
@@ -470,9 +464,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-////////////////////////////////////////
+  ////////////////////////////////////////
   /// KATEGORIEN LISTE
-////////////////////////////////////////
+  ////////////////////////////////////////
 
   Widget _buildCategoryTile(DatasetCategory cat, String label) {
     final isSelected = _selectedCategory == cat;
@@ -507,15 +501,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return ListTile(
-      leading: Icon(
-        icon,
-        color: isEnabled ? null : Colors.grey,
-      ),
+      leading: Icon(icon, color: isEnabled ? null : Colors.grey),
       title: Text(
         label,
-        style: TextStyle(
-          color: isEnabled ? null : Colors.grey,
-        ),
+        style: TextStyle(color: isEnabled ? null : Colors.grey),
       ),
       selected: isSelected,
       enabled: isEnabled,
@@ -532,9 +521,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-////////////////////////////////////////
+  ////////////////////////////////////////
   /// DRAWER
-////////////////////////////////////////
+  ////////////////////////////////////////
 
   Widget _buildMainDrawer(BuildContext context) {
     final theme = Theme.of(context);
@@ -565,14 +554,16 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(
                     'MobiData BW in Flutter',
-                    style: theme.textTheme.titleLarge
-                        ?.copyWith(color: Colors.white),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '(Inoffiziell)',
-                    style: theme.textTheme.bodyMedium
-                        ?.copyWith(color: Colors.white70),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white70,
+                    ),
                   ),
                 ],
               ),
@@ -582,7 +573,7 @@ class _HomeScreenState extends State<HomeScreen> {
             if (_showDrawerHint)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: _DrawerHint(
+                child: DrawerHint(
                   onClose: () {
                     _markDrawerHintAsShown();
                   },
@@ -610,7 +601,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
-                  builder: (_) => _SettingsSheet(
+                  builder: (_) => SettingsSheet(
                     autoLoadOnMove: _autoLoadOnMove,
                     openDrawerOnStart: _openDrawerOnStart,
                     onChangeAutoLoadOnMove: (val) {
@@ -626,21 +617,6 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
 
-            /*
-            ListTile(
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('Einstellungen'),
-              onTap: () {
-                Navigator.of(context).pop();
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => const _SettingsSheet(),
-                );
-              },
-            ),
-            */
-
             // impressum + lizenzen
             ListTile(
               leading: const Icon(Icons.info_outline),
@@ -650,469 +626,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
-                  builder: (_) => const _ImpressumSheet(),
+                  builder: (_) => const ImpressumSheet(),
                 );
               },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-////////////////////////////////////////
-/// DRAWER HINWEIS
-////////////////////////////////////////
-class _DrawerHint extends StatelessWidget {
-  final VoidCallback onClose;
-
-  const _DrawerHint({required this.onClose});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      color: Colors.amber.shade50,
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(Icons.swipe_right_alt,
-                color: theme.colorScheme.primary, size: 20),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                'Wähle hier die Datensatzkategorie.\n'
-                'Aktuell ist nur „Parkplätze“ aktiv.',
-                style: theme.textTheme.bodySmall,
-              ),
-            ),
-            IconButton(
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              icon: const Icon(Icons.close, size: 18),
-              onPressed: onClose,
-              tooltip: 'Hinweis ausblenden',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-////////////////////////////////////////
-/// EINSTELLUNGEN
-////////////////////////////////////////
-
-class _SettingsSheet extends StatefulWidget {
-  final bool autoLoadOnMove;
-  final bool openDrawerOnStart;
-  final ValueChanged<bool> onChangeAutoLoadOnMove;
-  final ValueChanged<bool> onChangeOpenDrawerOnStart;
-
-  final AppThemeSetting appThemeSetting;
-  final ValueChanged<AppThemeSetting> onChangeTheme; // NEU
-
-  const _SettingsSheet({
-    required this.autoLoadOnMove,
-    required this.openDrawerOnStart,
-    required this.onChangeAutoLoadOnMove,
-    required this.onChangeOpenDrawerOnStart,
-    required this.appThemeSetting,
-    required this.onChangeTheme,
-  });
-
-  @override
-  State<_SettingsSheet> createState() => _SettingsSheetState();
-}
-
-class _SettingsSheetState extends State<_SettingsSheet> {
-  late bool _autoLoadOnMove;
-  late bool _openDrawerOnStart;
-  late AppThemeSetting _appThemeSetting;
-
-  @override
-  void initState() {
-    super.initState();
-    _autoLoadOnMove = widget.autoLoadOnMove;
-    _openDrawerOnStart = widget.openDrawerOnStart;
-    _appThemeSetting = widget.appThemeSetting;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.settings_outlined,
-                      color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Einstellungen',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              //const SizedBox(height: 16),
-              Text(
-                'Darstellung',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-
-              RadioListTile<AppThemeSetting>(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Systemeinstellung verwenden'),
-                value: AppThemeSetting.system,
-                groupValue: _appThemeSetting,
-                onChanged: (val) {
-                  if (val == null) return;
-                  setState(() => _appThemeSetting = val);
-                  widget.onChangeTheme(val);
-                },
-              ),
-              RadioListTile<AppThemeSetting>(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Helles Design'),
-                value: AppThemeSetting.light,
-                groupValue: _appThemeSetting,
-                onChanged: (val) {
-                  if (val == null) return;
-                  setState(() => _appThemeSetting = val);
-                  widget.onChangeTheme(val);
-                },
-              ),
-              RadioListTile<AppThemeSetting>(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Dunkles Design'),
-                value: AppThemeSetting.dark,
-                groupValue: _appThemeSetting,
-                onChanged: (val) {
-                  if (val == null) return;
-                  setState(() => _appThemeSetting = val);
-                  widget.onChangeTheme(val);
-                },
-              ),
-
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                    'Parkplätze beim Kartenverschieben automatisch nachladen'),
-                subtitle: const Text(
-                    'Deaktivieren, wenn nur manuell über den Refresh-Button geladen werden soll.'),
-                value: _autoLoadOnMove,
-                onChanged: (val) {
-                  setState(() => _autoLoadOnMove = val);
-                  widget
-                      .onChangeAutoLoadOnMove(val); // an HomeScreen weitergeben
-                },
-              ),
-
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Drawer beim App-Start automatisch öffnen'),
-                value: _openDrawerOnStart,
-                onChanged: (val) {
-                  setState(() => _openDrawerOnStart = val);
-                  widget.onChangeOpenDrawerOnStart(val);
-                },
-              ),
-
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Schließen'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-////////////////////////////////////////
-/// IPRESSUM
-////////////////////////////////////////
-
-class _ImpressumSheet extends StatelessWidget {
-  const _ImpressumSheet();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.info_outline, color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Impressum & Lizenzen',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Hinweis',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Diese App ist ein inoffizielles Projekt des Codevember e.V '
-                'und steht in keinem offiziellen Zusammenhang mit der '
-                'NVBW Nahverkehrsgesellschaft Baden-Württemberg mbH.',
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Rechtliches und Lizenzen',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                '• MobiData BW – zentrale Daten- und Serviceplattform für Mobilität in Baden-Württemberg.\n'
-                '• Bereitstellung von Parkdaten (u. a. ParkAPI / DATEX II), '
-                'teilweise unter der Datenlizenz Deutschland – Namensnennung 2.0 (DL-DE-BY 2.0).',
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Open-Source-Komponenten',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                '• Flutter (Google)\n'
-                '• flutter_map + OpenStreetMap-Tiles\n'
-                '• Dio, Geolocator, flutter_spinkit\n'
-                'Lizenzdetails siehe „Flutter Lizenzen anzeigen“.',
-              ),
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () {
-                    showLicensePage(
-                      context: context,
-                      applicationName: 'MobiData BW in Flutter',
-                      applicationVersion: '0.1.0',
-                    );
-                  },
-                  icon: const Icon(Icons.article_outlined),
-                  label: const Text('Flutter-Lizenzen anzeigen'),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Schließen'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-////////////////////////////////////////
-/// FILTER LEISTE
-////////////////////////////////////////
-
-class _FilterBar extends StatelessWidget {
-  final bool showOnlyAvailable;
-  final ValueChanged<bool> onChangeAvailable;
-
-  const _FilterBar({
-    required this.showOnlyAvailable,
-    required this.onChangeAvailable,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      color: Colors.white.withOpacity(0.9),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                FilterChip(
-                  label: const Text('Freie Parkplätze'),
-                  selected: showOnlyAvailable,
-                  onSelected: onChangeAvailable,
-                  selectedColor: Colors.green.shade200,
-                ),
-              ],
-            ),
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Filter zurücksetzen',
-              onPressed: () {
-                onChangeAvailable(false);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-////////////////////////////////////////
-/// PARKPLATZ INFO
-////////////////////////////////////////
-
-class _ParkingSheet extends StatelessWidget {
-  final ParkingSite site;
-  const _ParkingSheet({required this.site});
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(site.name, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            if (site.availableSpaces != null)
-              Text('Kapazität: ${site.availableSpaces}'),
-            if (site.status != null) Text('Status: ${site.status}'),
-            if (site.roadName != null) Text('Adresse: ${site.roadName}'),
-            if (site.lat != null && site.lon != null)
-              Text(
-                  'Position: ${site.lat!.toStringAsFixed(5)}, ${site.lon!.toStringAsFixed(5)}'),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                  },
-                  icon: const Icon(Icons.close),
-                  label: const Text('Schließen'),
-                ),
-              ],
-            )
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-////////////////////////////////////////
-/// PARKPLATZ DETAILS
-////////////////////////////////////////
-
-class _ParkingInfoCard extends StatelessWidget {
-  final ParkingSite site;
-  final VoidCallback onClose;
-
-  const _ParkingInfoCard({
-    required this.site,
-    required this.onClose,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Card(
-      elevation: 6,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(
-          children: [
-            const Icon(Icons.local_parking, size: 28),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    site.name,
-                    style: theme.textTheme.titleMedium,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 4,
-                    children: [
-                      if (site.availableSpaces != null)
-                        Text('Kapazität: ${site.availableSpaces}',
-                            style: theme.textTheme.bodySmall),
-                      if (site.status != null)
-                        Text('Status: ${site.status}',
-                            style: theme.textTheme.bodySmall),
-                      if (site.lat != null && site.lon != null)
-                        Text(
-                          '${site.lat!.toStringAsFixed(4)}, ${site.lon!.toStringAsFixed(4)}',
-                          style: theme.textTheme.bodySmall
-                              ?.copyWith(color: Colors.grey[600]),
-                        ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                showModalBottomSheet(
-                  context: context,
-                  builder: (_) => _ParkingSheet(site: site),
-                );
-              },
-              child: const Text('Details'),
-            ),
-            const SizedBox(width: 8),
-            IconButton(
-              onPressed: onClose,
-              icon: const Icon(Icons.close),
-              tooltip: 'Schließen',
             ),
           ],
         ),
