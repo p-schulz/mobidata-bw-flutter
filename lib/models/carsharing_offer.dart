@@ -1,11 +1,11 @@
 class CarsharingOffer {
   final String id;
-  final String provider; // Anbietername
-  final String name; // Stations- oder Fahrzeugname
+  final String provider;
+  final String name;
   final double lat;
   final double lon;
 
-  final String vehicleType; // z.B. car, van, ...
+  final String vehicleType;
   final bool isAvailable;
   final int? availableVehicles;
 

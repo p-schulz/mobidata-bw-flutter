@@ -14,7 +14,6 @@ class CarsharingApiService {
     ),
   );
 
-  // TODO: an mobidata entpunkt anpassen
   static const String _endpoint =
       'https://api.mobidata-bw.de/.../carsharing/...';
 
@@ -35,7 +34,6 @@ class CarsharingApiService {
         if (offer != null) out.add(offer);
       }
     } else if (data is Map<String, dynamic>) {
-      // z.B. Wrapper { items: [...] }
       final items = data['items'];
       if (items is List) {
         for (final item in items) {
