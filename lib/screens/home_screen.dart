@@ -8,9 +8,24 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/mobidata_api.dart';
-import '../models/parking_site.dart';
 
-import '../models/app_theme_settings.dart';
+import '../models/app_theme_setting.dart';
+import '../models/parking_site.dart';
+import '../models/carsharing_offer.dart';
+import '../models/bikesharing_offer.dart';
+import '../models/scooter_offer.dart';
+import '../models/transit.dart';
+import '../models/charging_station.dart';
+import '../models/construction_site.dart';
+import '../models/bicycle_network.dart';
+
+import '../widgets/filter_bar.dart';
+import '../widgets/settings_sheet.dart';
+import '../widgets/drawer_main.dart';
+import '../widgets/imprint_sheet.dart';
+import '../widgets/filter_bar.dart';
+import '../widgets/legend_box.dart';
+import '../widgets/parking_info_card.dart';
 
 enum DatasetCategory {
   parking,
@@ -22,7 +37,6 @@ enum DatasetCategory {
   construction,
   bicycleNetwork,
 }
-
 
 ////////////////////////////////////////
 /// HAUPTSCREEN
@@ -45,7 +59,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
-
   // settings
   bool _drawerShownOnce = false;
   bool _showDrawerHint = true;
@@ -56,7 +69,6 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _prefsKeyAutoLoadOnMove = 'settings_autoLoadOnMove';
   static const _prefsKeyOpenDrawerOnStart = 'settings_openDrawerOnStart';
   static const _prefsKeyDrawerHintShown = 'drawerHintShown';
-
 
   // daten und karte
   final MapController _mapController = MapController();
@@ -78,25 +90,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // carsharing
 
-
   // bikesharing
-
 
   // scooter
 
-
   // transit
-
 
   // charging
 
-
   // construction
 
-
   // bicycle network
-
-
 
   // init
   @override
@@ -123,7 +127,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-
   // lade einstellungen
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
@@ -137,14 +140,13 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-
   Future<void> _setAutoLoadOnMove(bool value) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool(_prefsKeyAutoLoadOnMove, value);
-  setState(() {
-    _autoLoadOnMove = value;
-  });
-}
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefsKeyAutoLoadOnMove, value);
+    setState(() {
+      _autoLoadOnMove = value;
+    });
+  }
 
   Future<void> _setOpenDrawerOnStart(bool value) async {
     final prefs = await SharedPreferences.getInstance();
@@ -176,9 +178,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setBool('drawerHintShown', true);
   }
 */
-  
-
-
 
   Future<void> _ensureLocation() async {
     try {
@@ -188,7 +187,8 @@ class _HomeScreenState extends State<HomeScreen> {
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
       }
-      if (permission == LocationPermission.deniedForever || permission == LocationPermission.denied) {
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
         return;
       }
       final pos = await Geolocator.getCurrentPosition();
@@ -288,17 +288,15 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-
 ////////////////////////////////////////
-/// BUILD
+  /// BUILD
 ////////////////////////////////////////
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final markers = _sites
-        .where((s) => s.lat != null && s.lon != null)
-        .map((s) {
+    final markers =
+        _sites.where((s) => s.lat != null && s.lon != null).map((s) {
       final isSelected = _selectedSite?.id == s.id;
       final color = _statusColor(s);
 
@@ -339,7 +337,6 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }).toList();
 
-
     return Scaffold(
       key: _scaffoldKey,
 
@@ -373,7 +370,7 @@ class _HomeScreenState extends State<HomeScreen> {
               TileLayer(
                 urlTemplate: isDark
                     ? 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png' // Beispiel dunkel/kontrastreich
-                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',       // Standard
+                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // Standard
                 subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.example.mobidata_bw_flutter',
               ),
@@ -468,15 +465,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 },
               ),
             ),
-
         ],
       ),
     );
   }
 
-  
 ////////////////////////////////////////
-/// KATEGORIEN LISTE
+  /// KATEGORIEN LISTE
 ////////////////////////////////////////
 
   Widget _buildCategoryTile(DatasetCategory cat, String label) {
@@ -527,20 +522,18 @@ class _HomeScreenState extends State<HomeScreen> {
       onTap: !isEnabled
           ? null
           : () {
-        Navigator.of(context).pop();
-        setState(() {
-          _selectedCategory = cat;
-          // aktuell lädt _loadParking() nur parkplätze
-        });
-        _loadParking();
-      },
+              Navigator.of(context).pop();
+              setState(() {
+                _selectedCategory = cat;
+                // aktuell lädt _loadParking() nur parkplätze
+              });
+              _loadParking();
+            },
     );
   }
 
-
-
 ////////////////////////////////////////
-/// DRAWER
+  /// DRAWER
 ////////////////////////////////////////
 
   Widget _buildMainDrawer(BuildContext context) {
@@ -596,7 +589,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-
             // kategorien
             Expanded(
               child: ListView(
@@ -633,7 +625,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-            
+
             /*
             ListTile(
               leading: const Icon(Icons.settings_outlined),
@@ -662,15 +654,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-
           ],
         ),
       ),
     );
   }
-
 }
-
 
 ////////////////////////////////////////
 /// DRAWER HINWEIS
@@ -699,7 +688,7 @@ class _DrawerHint extends StatelessWidget {
             Expanded(
               child: Text(
                 'Wähle hier die Datensatzkategorie.\n'
-                    'Aktuell ist nur „Parkplätze“ aktiv.',
+                'Aktuell ist nur „Parkplätze“ aktiv.',
                 style: theme.textTheme.bodySmall,
               ),
             ),
@@ -716,7 +705,6 @@ class _DrawerHint extends StatelessWidget {
     );
   }
 }
-
 
 ////////////////////////////////////////
 /// EINSTELLUNGEN
@@ -822,7 +810,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                   widget.onChangeTheme(val);
                 },
               ),
-              
+
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text(
@@ -832,14 +820,14 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                 value: _autoLoadOnMove,
                 onChanged: (val) {
                   setState(() => _autoLoadOnMove = val);
-                  widget.onChangeAutoLoadOnMove(val); // an HomeScreen weitergeben
+                  widget
+                      .onChangeAutoLoadOnMove(val); // an HomeScreen weitergeben
                 },
               ),
 
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
-                title: const Text(
-                    'Drawer beim App-Start automatisch öffnen'),
+                title: const Text('Drawer beim App-Start automatisch öffnen'),
                 value: _openDrawerOnStart,
                 onChanged: (val) {
                   setState(() => _openDrawerOnStart = val);
@@ -855,7 +843,6 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                   child: const Text('Schließen'),
                 ),
               ),
-            
             ],
           ),
         ),
@@ -863,7 +850,6 @@ class _SettingsSheetState extends State<_SettingsSheet> {
     );
   }
 }
-
 
 ////////////////////////////////////////
 /// IPRESSUM
@@ -895,7 +881,6 @@ class _ImpressumSheet extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-
               Text(
                 'Hinweis',
                 style: theme.textTheme.titleMedium,
@@ -903,10 +888,9 @@ class _ImpressumSheet extends StatelessWidget {
               const SizedBox(height: 4),
               const Text(
                 'Diese App ist ein inoffizielles Projekt des Codevember e.V '
-                    'und steht in keinem offiziellen Zusammenhang mit der '
-                    'NVBW Nahverkehrsgesellschaft Baden-Württemberg mbH.',
+                'und steht in keinem offiziellen Zusammenhang mit der '
+                'NVBW Nahverkehrsgesellschaft Baden-Württemberg mbH.',
               ),
-
               const SizedBox(height: 16),
               Text(
                 'Rechtliches und Lizenzen',
@@ -915,10 +899,9 @@ class _ImpressumSheet extends StatelessWidget {
               const SizedBox(height: 4),
               const Text(
                 '• MobiData BW – zentrale Daten- und Serviceplattform für Mobilität in Baden-Württemberg.\n'
-                    '• Bereitstellung von Parkdaten (u. a. ParkAPI / DATEX II), '
-                    'teilweise unter der Datenlizenz Deutschland – Namensnennung 2.0 (DL-DE-BY 2.0).',
+                '• Bereitstellung von Parkdaten (u. a. ParkAPI / DATEX II), '
+                'teilweise unter der Datenlizenz Deutschland – Namensnennung 2.0 (DL-DE-BY 2.0).',
               ),
-
               const SizedBox(height: 16),
               Text(
                 'Open-Source-Komponenten',
@@ -927,11 +910,10 @@ class _ImpressumSheet extends StatelessWidget {
               const SizedBox(height: 4),
               const Text(
                 '• Flutter (Google)\n'
-                    '• flutter_map + OpenStreetMap-Tiles\n'
-                    '• Dio, Geolocator, flutter_spinkit\n'
-                    'Lizenzdetails siehe „Flutter Lizenzen anzeigen“.',
+                '• flutter_map + OpenStreetMap-Tiles\n'
+                '• Dio, Geolocator, flutter_spinkit\n'
+                'Lizenzdetails siehe „Flutter Lizenzen anzeigen“.',
               ),
-
               const SizedBox(height: 16),
               Align(
                 alignment: Alignment.centerLeft,
@@ -947,7 +929,6 @@ class _ImpressumSheet extends StatelessWidget {
                   label: const Text('Flutter-Lizenzen anzeigen'),
                 ),
               ),
-
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
@@ -963,7 +944,6 @@ class _ImpressumSheet extends StatelessWidget {
     );
   }
 }
-
 
 ////////////////////////////////////////
 /// FILTER LEISTE
@@ -1013,7 +993,6 @@ class _FilterBar extends StatelessWidget {
   }
 }
 
-
 ////////////////////////////////////////
 /// PARKPLATZ INFO
 ////////////////////////////////////////
@@ -1033,11 +1012,13 @@ class _ParkingSheet extends StatelessWidget {
           children: [
             Text(site.name, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            if (site.availableSpaces != null) Text('Kapazität: ${site.availableSpaces}'),
+            if (site.availableSpaces != null)
+              Text('Kapazität: ${site.availableSpaces}'),
             if (site.status != null) Text('Status: ${site.status}'),
             if (site.roadName != null) Text('Adresse: ${site.roadName}'),
             if (site.lat != null && site.lon != null)
-              Text('Position: ${site.lat!.toStringAsFixed(5)}, ${site.lon!.toStringAsFixed(5)}'),
+              Text(
+                  'Position: ${site.lat!.toStringAsFixed(5)}, ${site.lon!.toStringAsFixed(5)}'),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -1056,7 +1037,6 @@ class _ParkingSheet extends StatelessWidget {
     );
   }
 }
-
 
 ////////////////////////////////////////
 /// PARKPLATZ DETAILS
@@ -1119,7 +1099,6 @@ class _ParkingInfoCard extends StatelessWidget {
                 ],
               ),
             ),
-
             TextButton(
               onPressed: () {
                 showModalBottomSheet(
@@ -1129,7 +1108,6 @@ class _ParkingInfoCard extends StatelessWidget {
               },
               child: const Text('Details'),
             ),
-
             const SizedBox(width: 8),
             IconButton(
               onPressed: onClose,

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
-import 'models/app_theme_settings.dart';
+import 'models/app_theme_setting.dart';
 
 const _prefsKeyTheme = 'settings_appTheme';
 
