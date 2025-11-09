@@ -10,6 +10,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/mobidata_api.dart';
 import '../models/parking_site.dart';
 
+import '../models/app_theme_settings.dart';
+
 enum DatasetCategory {
   parking,
   carsharing,
@@ -27,7 +29,14 @@ enum DatasetCategory {
 ////////////////////////////////////////
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  final AppThemeSetting appThemeSetting;
+  final ValueChanged<AppThemeSetting> onChangeAppTheme;
+
+  const HomeScreen({
+    super.key,
+    required this.appThemeSetting,
+    required this.onChangeAppTheme,
+  });
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -286,6 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final markers = _sites
         .where((s) => s.lat != null && s.lon != null)
         .map((s) {
@@ -361,7 +371,10 @@ class _HomeScreenState extends State<HomeScreen> {
             // layer mit markern
             children: [
               TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                urlTemplate: isDark
+                    ? 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png' // Beispiel dunkel/kontrastreich
+                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',       // Standard
+                subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'com.example.mobidata_bw_flutter',
               ),
               MarkerLayer(markers: markers),
@@ -573,21 +586,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
 
             // hinweis
-            /*
-            if (_showDrawerHint)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: _DrawerHint(
-                  onClose: () async {
-                    setState(() {
-                      _showDrawerHint = false;
-                    });
-                    await _markDrawerHintAsShown();
-                  },
-                ),
-              ),
-            */
-
             if (_showDrawerHint)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0),
@@ -629,6 +627,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     onChangeOpenDrawerOnStart: (val) {
                       _setOpenDrawerOnStart(val);
                     },
+                    appThemeSetting: widget.appThemeSetting,
+                    onChangeTheme: widget.onChangeAppTheme,
                   ),
                 );
               },
@@ -728,11 +728,16 @@ class _SettingsSheet extends StatefulWidget {
   final ValueChanged<bool> onChangeAutoLoadOnMove;
   final ValueChanged<bool> onChangeOpenDrawerOnStart;
 
+  final AppThemeSetting appThemeSetting;
+  final ValueChanged<AppThemeSetting> onChangeTheme; // NEU
+
   const _SettingsSheet({
     required this.autoLoadOnMove,
     required this.openDrawerOnStart,
     required this.onChangeAutoLoadOnMove,
     required this.onChangeOpenDrawerOnStart,
+    required this.appThemeSetting,
+    required this.onChangeTheme,
   });
 
   @override
@@ -742,12 +747,14 @@ class _SettingsSheet extends StatefulWidget {
 class _SettingsSheetState extends State<_SettingsSheet> {
   late bool _autoLoadOnMove;
   late bool _openDrawerOnStart;
+  late AppThemeSetting _appThemeSetting;
 
   @override
   void initState() {
     super.initState();
     _autoLoadOnMove = widget.autoLoadOnMove;
     _openDrawerOnStart = widget.openDrawerOnStart;
+    _appThemeSetting = widget.appThemeSetting;
   }
 
   @override
@@ -775,6 +782,47 @@ class _SettingsSheetState extends State<_SettingsSheet> {
               ),
               const SizedBox(height: 12),
 
+              //const SizedBox(height: 16),
+              Text(
+                'Darstellung',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+
+              RadioListTile<AppThemeSetting>(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Systemeinstellung verwenden'),
+                value: AppThemeSetting.system,
+                groupValue: _appThemeSetting,
+                onChanged: (val) {
+                  if (val == null) return;
+                  setState(() => _appThemeSetting = val);
+                  widget.onChangeTheme(val);
+                },
+              ),
+              RadioListTile<AppThemeSetting>(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Helles Design'),
+                value: AppThemeSetting.light,
+                groupValue: _appThemeSetting,
+                onChanged: (val) {
+                  if (val == null) return;
+                  setState(() => _appThemeSetting = val);
+                  widget.onChangeTheme(val);
+                },
+              ),
+              RadioListTile<AppThemeSetting>(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Dunkles Design'),
+                value: AppThemeSetting.dark,
+                groupValue: _appThemeSetting,
+                onChanged: (val) {
+                  if (val == null) return;
+                  setState(() => _appThemeSetting = val);
+                  widget.onChangeTheme(val);
+                },
+              ),
+              
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 title: const Text(
@@ -807,6 +855,7 @@ class _SettingsSheetState extends State<_SettingsSheet> {
                   child: const Text('Schließen'),
                 ),
               ),
+            
             ],
           ),
         ),
@@ -815,76 +864,6 @@ class _SettingsSheetState extends State<_SettingsSheet> {
   }
 }
 
-/*
-class _SettingsSheetState extends State<_SettingsSheet> {
-  bool _autoLoadOnMove = true;
-  bool _openDrawerOnStart = true;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.settings_outlined,
-                      color: theme.colorScheme.primary),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Einstellungen',
-                    style: theme.textTheme.titleLarge,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Parkplätze beim Kartenverschieben automatisch nachladen'),
-                subtitle: const Text(
-                    'Deaktivieren, wenn nur manuell über den Refresh-Button geladen werden soll.'),
-                value: _autoLoadOnMove,
-                onChanged: (val) {
-                  setState(() => _autoLoadOnMove = val);
-                  // todo: SharedPreferences anbinden
-
-                },
-              ),
-
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Drawer beim App-Start automatisch öffnen'),
-                value: _openDrawerOnStart,
-                onChanged: (val) {
-                  setState(() => _openDrawerOnStart = val);
-                  // todo: persistent speichern
-
-                },
-              ),
-
-              const SizedBox(height: 16),
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Schließen'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-*/
 
 ////////////////////////////////////////
 /// IPRESSUM
