@@ -1,5 +1,5 @@
 # mobidata_bw_flutter
-Flutter-App für den mobilen Zugriff auf digitale Mobilitätsdaten von MobiData BW. 
+Flutter-App für den mobilen Zugriff auf digitale Mobilitätsdaten von MobiData BW. Mehr Informationen auf der offiziellen Webseite: https://mobidata-bw.de/
 
 ## Datenquellen und Lizenzen
 Datenpaket: MobiData BW; NVBW – Nahverkehrsgesellschaft Baden-Württemberg mbH
