@@ -6,8 +6,8 @@ class CarsharingOffer {
   final double lon;
 
   final String vehicleType;
-  final bool isAvailable;
-  final int? availableVehicles;
+  final int availableVehicles;
+  final bool isRentingAllowed;
 
   CarsharingOffer({
     required this.id,
@@ -16,35 +16,28 @@ class CarsharingOffer {
     required this.lat,
     required this.lon,
     required this.vehicleType,
-    required this.isAvailable,
-    this.availableVehicles,
+    required this.availableVehicles,
+    required this.isRentingAllowed,
   });
 
   static CarsharingOffer? fromJson(Map<String, dynamic> j) {
     try {
-      final lat = (j['lat'] ?? j['latitude']) as num?;
-      final lon = (j['lon'] ?? j['longitude']) as num?;
+      final lat = j['lat'] ?? j['latitude'];
+      final lon = j['lon'] ?? j['longitude'];
       if (lat == null || lon == null) return null;
 
-      final id = (j['id'] ?? j['station_id'] ?? '').toString();
-      final provider =
-          (j['provider'] ?? j['operator'] ?? 'Unbekannt').toString();
-      final name =
-          (j['name'] ?? j['station_name'] ?? 'CarSharing-Station').toString();
-      final vehicleType = (j['vehicle_type'] ?? 'car').toString();
-      final isAvailable = (j['is_available'] ?? j['available'] ?? true) as bool;
-      final availableVehicles =
-          (j['available_vehicles'] ?? j['num_vehicles']) as int?;
-
       return CarsharingOffer(
-        id: id,
-        provider: provider,
-        name: name,
-        lat: lat.toDouble(),
-        lon: lon.toDouble(),
-        vehicleType: vehicleType,
-        isAvailable: isAvailable,
-        availableVehicles: availableVehicles,
+        id: (j['station_id'] ?? j['id'] ?? '').toString(),
+        provider: (j['provider'] ?? j['operator'] ?? 'unbekannt').toString(),
+        name:
+            (j['name'] ?? j['station_name'] ?? 'CarSharing-Station').toString(),
+        lat: (lat as num).toDouble(),
+        lon: (lon as num).toDouble(),
+        vehicleType: (j['vehicle_type'] ?? 'car').toString(),
+        availableVehicles: (j['num_vehicles_available'] ??
+            j['available_vehicles'] ??
+            0) as int,
+        isRentingAllowed: (j['is_renting_allowed'] ?? true) as bool,
       );
     } catch (_) {
       return null;

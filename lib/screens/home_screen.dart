@@ -87,6 +87,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showOnlyAvailable = false;
 
   // carsharing
+  List<CarsharingOffer> _carsharingOffers = [];
 
   // bikesharing
 
@@ -281,10 +282,41 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  ////////////////////////////////////////
-  /// BUILD
-  ////////////////////////////////////////
+  Future<void> _loadCarsharing({bool forceRefresh = false}) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
+    try {
+      final all = await _carsharingApi.fetchCarsharingOffers(
+        forceRefresh: forceRefresh,
+      );
+      final b = _currentBounds();
+      final filtered = all.where((o) {
+        return o.lat >= b.south &&
+            o.lat <= b.north &&
+            o.lon >= b.west &&
+            o.lon <= b.east;
+      }).toList();
+
+      setState(() {
+        _carsharingOffers = filtered;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
+
+  ////////////////////////////////////////
+  /// MAIN SCREEN
+  ////////////////////////////////////////
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -415,21 +447,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          /*
-          Positioned(
-            top: 12,
-            left: 12,
-            right: 12,
-            child: FilterBar(
-              showOnlyAvailable: _showOnlyAvailable,
-              onChangeAvailable: (val) {
-                setState(() => _showOnlyAvailable = val);
-                _loadParking();
-              },
-            ),
-          ),
-          */
-
           // overlay zum laden
           if (_loading)
             const Positioned.fill(
@@ -465,9 +482,9 @@ class _HomeScreenState extends State<HomeScreen> {
                       width: 0.5,
                     ),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisSize: MainAxisSize.min,
-                    children: const [
+                    children: [
                       Icon(Icons.local_parking, color: Colors.green, size: 12),
                       SizedBox(width: 4),
                       Text('frei'),

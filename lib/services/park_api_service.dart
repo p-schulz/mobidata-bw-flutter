@@ -16,10 +16,9 @@ class ParkApiService {
     ),
   );
 
+  // MobiData BW ParkAPI / DATEX-II-Light Endpoint
   static const String _parkEndpoint =
       'https://api.mobidata-bw.de/park-api/api/public/v3/parking-sites';
-
-  static const String _cacheKeyParkingSites = 'parking_sites_all';
 
   final CacheService _cache = CacheService();
 
@@ -27,14 +26,11 @@ class ParkApiService {
     CancelToken? cancelToken,
     bool forceRefresh = false,
   }) async {
-    print('[ParkApiService] checking cache for parking sites…');
     if (!forceRefresh) {
-      // fixed: key übergeben
-      print('[ParkApiService] looking for cached parking sites with key');
-      final cached = _cache.loadParkingSites(_cacheKeyParkingSites);
-      if (cached != null && cached.isNotEmpty) {
+      final cachedJson = _cache.loadParkingSites();
+      if (cachedJson != null && cachedJson.isNotEmpty) {
         final cachedSites = <ParkingSite>[];
-        for (final m in cached) {
+        for (final m in cachedJson) {
           final ps = ParkingSite.fromJson(m);
           if (ps != null) cachedSites.add(ps);
         }
@@ -46,10 +42,6 @@ class ParkApiService {
       }
     }
 
-    print(
-        '[ParkApiService] no cached parking sites found or force refresh requested, fetching from API…');
-
-    // kein (brauchbarer) cache: HTTP-Request
     final res = await _dio.get(
       _parkEndpoint,
       cancelToken: cancelToken,
@@ -66,7 +58,7 @@ class ParkApiService {
     final List<ParkingSite> out = [];
     final List<Map<String, dynamic>> rawForCache = [];
 
-    // Fall: top-level Liste
+    // fall: top-level List
     if (data is List) {
       print('[ParkApiService] top-level List length: ${data.length}');
       for (final item in data) {
@@ -80,16 +72,16 @@ class ParkApiService {
       }
       print('[ParkApiService] parsed sites from top-level list: ${out.length}');
       if (out.isNotEmpty) {
-        await _cache.saveParkingSites(_cacheKeyParkingSites, rawForCache);
+        await _cache.saveParkingSites(rawForCache);
       }
       return out;
     }
 
-    // Fall: Map / Objekt
+    // fall: Map / Objekt
     if (data is Map<String, dynamic>) {
       print('[ParkApiService] map keys: ${data.keys.toList()}');
 
-      // wrapper "items" + "total_count"
+      // Wrapper "items" + "total_count"
       if (data['items'] is List) {
         final items = data['items'] as List;
         print('[ParkApiService] items length: ${items.length}');
@@ -100,6 +92,7 @@ class ParkApiService {
 
           final ppl = m['parkingPublicationLight'];
           if (ppl is Map<String, dynamic>) {
+            // DATEX-II: parkingPublicationLight.parkingSite[]
             final sites = ppl['parkingSite'];
             if (sites is List) {
               for (final s in sites) {
@@ -112,12 +105,14 @@ class ParkApiService {
                 }
               }
             }
+
+            // ggf. später: ppl['parkingSpace'] ...
           }
         }
 
         print('[ParkApiService] parsed sites from items: ${out.length}');
         if (out.isNotEmpty) {
-          await _cache.saveParkingSites(_cacheKeyParkingSites, rawForCache);
+          await _cache.saveParkingSites(rawForCache);
           return out;
         }
       }
@@ -145,12 +140,11 @@ class ParkApiService {
         }
         print('[ParkApiService] parsed sites from features: ${out.length}');
         if (out.isNotEmpty) {
-          await _cache.saveParkingSites(_cacheKeyParkingSites, rawForCache);
+          await _cache.saveParkingSites(rawForCache);
           return out;
         }
       }
 
-      // fallback
       for (final entry in data.entries) {
         final v = entry.value;
         if (v is List && v.isNotEmpty && v.first is Map) {
@@ -168,7 +162,7 @@ class ParkApiService {
           print(
               '[ParkApiService] parsed sites from key ${entry.key}: ${out.length}');
           if (out.isNotEmpty) {
-            await _cache.saveParkingSites(_cacheKeyParkingSites, rawForCache);
+            await _cache.saveParkingSites(rawForCache);
             return out;
           }
         }
