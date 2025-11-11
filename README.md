@@ -6,6 +6,8 @@ Datenpaket: MobiData BW; NVBW – Nahverkehrsgesellschaft Baden-Württemberg mbH
 Lizenz: Datenlizenz Deutschland – Namensnennung – Version 2.0 (DL-DE-BY 2.0)
 https://www.govdata.de/dl-de/by-2-0
 
+Sonstige Lizenzen (z.B. Kartendienste und verwendete Software-Bibliotheken) sind im Impressum der App aufgelistet.
+
 ## Haftungsausschluss
 Dieses Projekt steht in keinem offiziellen Zusammenhang mit der NVBW – Nahverkehrsgesellschaft Baden-Württemberg mbH.
 Es nutzt öffentliche, frei lizenzierte Daten, die über die Plattform MobiData BW bereitgestellt werden (Open Data).
