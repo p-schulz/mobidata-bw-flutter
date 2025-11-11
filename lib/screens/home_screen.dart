@@ -444,30 +444,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
           // legende
           Positioned(
+            left: 8,
             bottom: 8,
-            left: 12,
-            right: 12,
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: const [
-                  Icon(Icons.local_parking, color: Colors.green, size: 18),
-                  SizedBox(width: 4),
-                  Text('frei'),
-                  SizedBox(width: 12),
-                  Icon(Icons.local_parking, color: Colors.red, size: 18),
-                  SizedBox(width: 4),
-                  Text('belegt'),
-                  SizedBox(width: 12),
-                  Icon(Icons.local_parking, color: Colors.blue, size: 18),
-                  SizedBox(width: 4),
-                  Text('unbekannt'),
-                ],
-              ),
+            child: Builder(
+              builder: (context) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+                final bgColor = isDark
+                    ? Colors.black.withOpacity(0.6)
+                    : Colors.white.withOpacity(0.8);
+                final textColor = isDark ? Colors.white : Colors.black87;
+
+                return Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: bgColor,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isDark ? Colors.white24 : Colors.black26,
+                      width: 0.5,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.local_parking, color: Colors.green, size: 12),
+                      SizedBox(width: 4),
+                      Text('frei'),
+                      SizedBox(width: 12),
+                      Icon(Icons.local_parking, color: Colors.red, size: 12),
+                      SizedBox(width: 4),
+                      Text('belegt'),
+                      SizedBox(width: 12),
+                      Icon(Icons.local_parking, color: Colors.blue, size: 12),
+                      SizedBox(width: 4),
+                      Text('unbekannt'),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
 
