@@ -67,10 +67,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // daten und karte
   final MapController _mapController = MapController();
-  final MobiDataApi _api = MobiDataApi();
+  final ParkApiService _parkApiService = ParkApiService();
+  final CarsharingApiService _carsharingApi = CarsharingApiService();
 
   LatLng _center = const LatLng(48.5216, 9.0576);
-  double _zoom = 8.0;
+  double _zoom = 13.0;
 
   bool _loading = false;
   String? _error;
@@ -222,7 +223,8 @@ class _HomeScreenState extends State<HomeScreen> {
       print('[HomeScreen] loading parking…');
 
       // daten abrufen
-      final allSites = await _api.fetchParkingSites();
+      final allSites = await _parkApiService.fetchParkingSites();
+
       print('[HomeScreen] got ${allSites.length} total');
 
       // kartenbegrenzung

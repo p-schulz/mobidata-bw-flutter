@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'models/app_theme_setting.dart';
+import 'services/cache_service.dart';
 
 const _prefsKeyTheme = 'settings_appTheme';
 
-
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await CacheService.init();
   runApp(const MobiDataApp());
 }
-
 
 class MobiDataApp extends StatefulWidget {
   const MobiDataApp({super.key});
@@ -18,7 +18,6 @@ class MobiDataApp extends StatefulWidget {
   @override
   State<MobiDataApp> createState() => _MobiDataAppState();
 }
-
 
 class _MobiDataAppState extends State<MobiDataApp> {
   AppThemeSetting _appThemeSetting = AppThemeSetting.system;
@@ -98,7 +97,7 @@ class _MobiDataAppState extends State<MobiDataApp> {
     );
 
     return MaterialApp(
-      title: 'MobiData BW Starter',
+      title: 'MobiData BW',
       theme: baseLight,
       darkTheme: baseDark,
       themeMode: _themeMode,

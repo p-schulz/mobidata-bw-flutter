@@ -33,7 +33,7 @@ class FilterBar extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.refresh),
-              tooltip: 'Filter zurücksetzen',
+              tooltip: 'Aktualisieren',
               onPressed: () {
                 onChangeAvailable(false);
               },

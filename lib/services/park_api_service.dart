@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 
 import '../models/parking_site.dart';
+import '../services/cache_service.dart';
 
-class MobiDataApi {
+class ParkApiService {
   final Dio _dio = Dio(
     BaseOptions(
       connectTimeout: const Duration(seconds: 10),
@@ -15,19 +16,47 @@ class MobiDataApi {
     ),
   );
 
-  // MobiData BW ParkAPI / DATEX-II-Light Endpoint
   static const String _parkEndpoint =
       'https://api.mobidata-bw.de/park-api/api/public/v3/parking-sites';
 
-  Future<List<ParkingSite>> fetchParkingSites(
-      {CancelToken? cancelToken}) async {
+  static const String _cacheKeyParkingSites = 'parking_sites_all';
+
+  final CacheService _cache = CacheService();
+
+  Future<List<ParkingSite>> fetchParkingSites({
+    CancelToken? cancelToken,
+    bool forceRefresh = false,
+  }) async {
+    print('[ParkApiService] checking cache for parking sites…');
+    if (!forceRefresh) {
+      // fixed: key übergeben
+      print('[ParkApiService] looking for cached parking sites with key');
+      final cached = _cache.loadParkingSites(_cacheKeyParkingSites);
+      if (cached != null && cached.isNotEmpty) {
+        final cachedSites = <ParkingSite>[];
+        for (final m in cached) {
+          final ps = ParkingSite.fromJson(m);
+          if (ps != null) cachedSites.add(ps);
+        }
+        if (cachedSites.isNotEmpty) {
+          print(
+              '[ParkApiService] using cached parking sites: ${cachedSites.length}');
+          return cachedSites;
+        }
+      }
+    }
+
+    print(
+        '[ParkApiService] no cached parking sites found or force refresh requested, fetching from API…');
+
+    // kein (brauchbarer) cache: HTTP-Request
     final res = await _dio.get(
       _parkEndpoint,
       cancelToken: cancelToken,
     );
 
     print(
-        '[MobiDataApi] status: ${res.statusCode}, type: ${res.data.runtimeType}');
+        '[ParkApiService] status: ${res.statusCode}, type: ${res.data.runtimeType}');
 
     dynamic data = res.data;
     if (data is String) {
@@ -35,25 +64,35 @@ class MobiDataApi {
     }
 
     final List<ParkingSite> out = [];
+    final List<Map<String, dynamic>> rawForCache = [];
 
+    // Fall: top-level Liste
     if (data is List) {
-      print('[MobiDataApi] top-level List length: ${data.length}');
+      print('[ParkApiService] top-level List length: ${data.length}');
       for (final item in data) {
         if (item is! Map) continue;
-        final ps = ParkingSite.fromJson(Map<String, dynamic>.from(item as Map));
-        if (ps != null) out.add(ps);
+        final map = Map<String, dynamic>.from(item as Map);
+        final ps = ParkingSite.fromJson(map);
+        if (ps != null) {
+          out.add(ps);
+          rawForCache.add(map);
+        }
       }
-      print('[MobiDataApi] parsed sites from top-level list: ${out.length}');
+      print('[ParkApiService] parsed sites from top-level list: ${out.length}');
+      if (out.isNotEmpty) {
+        await _cache.saveParkingSites(_cacheKeyParkingSites, rawForCache);
+      }
       return out;
     }
 
+    // Fall: Map / Objekt
     if (data is Map<String, dynamic>) {
-      print('[MobiDataApi] map keys: ${data.keys.toList()}');
+      print('[ParkApiService] map keys: ${data.keys.toList()}');
 
-      // Wrapper "items" + "total_count"
+      // wrapper "items" + "total_count"
       if (data['items'] is List) {
         final items = data['items'] as List;
-        print('[MobiDataApi] items length: ${items.length}');
+        print('[ParkApiService] items length: ${items.length}');
 
         for (final item in items) {
           if (item is! Map) continue;
@@ -61,30 +100,32 @@ class MobiDataApi {
 
           final ppl = m['parkingPublicationLight'];
           if (ppl is Map<String, dynamic>) {
-            // DATEX-II: parkingPublicationLight.parkingSite[]
             final sites = ppl['parkingSite'];
             if (sites is List) {
               for (final s in sites) {
                 if (s is! Map) continue;
-                final ps = ParkingSite.fromJson(
-                  Map<String, dynamic>.from(s as Map),
-                );
-                if (ps != null) out.add(ps);
+                final siteMap = Map<String, dynamic>.from(s as Map);
+                final ps = ParkingSite.fromJson(siteMap);
+                if (ps != null) {
+                  out.add(ps);
+                  rawForCache.add(siteMap);
+                }
               }
             }
-
-            // final spaces = ppl['parkingSpace'];
-            // ...
           }
         }
 
-        print('[MobiDataApi] parsed sites from items: ${out.length}');
-        if (out.isNotEmpty) return out;
+        print('[ParkApiService] parsed sites from items: ${out.length}');
+        if (out.isNotEmpty) {
+          await _cache.saveParkingSites(_cacheKeyParkingSites, rawForCache);
+          return out;
+        }
       }
 
+      // GeoJSON
       if (data['features'] is List) {
         final features = data['features'] as List;
-        print('[MobiDataApi] features length: ${features.length}');
+        print('[ParkApiService] features length: ${features.length}');
         for (final f in features) {
           if (f is! Map) continue;
           final m = Map<String, dynamic>.from(f as Map);
@@ -97,31 +138,43 @@ class MobiDataApi {
             'geometry': geom,
           };
           final ps = ParkingSite.fromJson(merged);
-          if (ps != null) out.add(ps);
+          if (ps != null) {
+            out.add(ps);
+            rawForCache.add(merged);
+          }
         }
-        print('[MobiDataApi] parsed sites from features: ${out.length}');
-        if (out.isNotEmpty) return out;
+        print('[ParkApiService] parsed sites from features: ${out.length}');
+        if (out.isNotEmpty) {
+          await _cache.saveParkingSites(_cacheKeyParkingSites, rawForCache);
+          return out;
+        }
       }
 
+      // fallback
       for (final entry in data.entries) {
         final v = entry.value;
         if (v is List && v.isNotEmpty && v.first is Map) {
           print(
-              '[MobiDataApi] trying list at key: ${entry.key}, length: ${v.length}');
+              '[ParkApiService] trying list at key: ${entry.key}, length: ${v.length}');
           for (final item in v) {
             if (item is! Map) continue;
-            final ps = ParkingSite.fromJson(
-              Map<String, dynamic>.from(item as Map),
-            );
-            if (ps != null) out.add(ps);
+            final map = Map<String, dynamic>.from(item as Map);
+            final ps = ParkingSite.fromJson(map);
+            if (ps != null) {
+              out.add(ps);
+              rawForCache.add(map);
+            }
           }
           print(
-              '[MobiDataApi] parsed sites from key ${entry.key}: ${out.length}');
-          if (out.isNotEmpty) return out;
+              '[ParkApiService] parsed sites from key ${entry.key}: ${out.length}');
+          if (out.isNotEmpty) {
+            await _cache.saveParkingSites(_cacheKeyParkingSites, rawForCache);
+            return out;
+          }
         }
       }
 
-      print('[MobiDataApi] no suitable list found in map');
+      print('[ParkApiService] no suitable list found in map');
     }
 
     return out;
