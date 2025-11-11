@@ -24,6 +24,7 @@ import '../widgets/settings_sheet.dart';
 import '../widgets/drawer_hint.dart';
 import '../widgets/imprint_sheet.dart';
 import '../widgets/filter_bar.dart';
+import '../widgets/map_attribution.dart';
 import '../widgets/parking_info_card.dart';
 
 enum DatasetCategory {
@@ -76,6 +77,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = false;
   String? _error;
   Timer? _debounce;
+  bool _showFilterBar = false;
 
   DatasetCategory _selectedCategory = DatasetCategory.parking;
 
@@ -332,7 +334,20 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       key: _scaffoldKey,
 
-      appBar: AppBar(title: const Text('MobiData BW in Flutter')),
+      appBar: AppBar(
+        title: const Text('MobiData BW in Flutter'),
+        actions: [
+          IconButton(
+            icon: Icon(_showFilterBar ? Icons.close : Icons.filter_list),
+            tooltip: _showFilterBar ? 'Filter verstecken' : 'Filter anzeigen',
+            onPressed: () {
+              setState(() {
+                _showFilterBar = !_showFilterBar;
+              });
+            },
+          ),
+        ],
+      ),
 
       drawer: _buildMainDrawer(context),
 
@@ -359,16 +374,48 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               TileLayer(
                 urlTemplate: isDark
-                    ? 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png' // Beispiel dunkel/kontrastreich
-                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // Standard
+                    ? 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
+                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // standard OSM
                 subdomains: const ['a', 'b', 'c'],
-                userAgentPackageName: 'com.example.mobidata_bw_flutter',
+                userAgentPackageName: 'org.codevember.mobidata_bw_flutter',
               ),
               MarkerLayer(markers: markers),
             ],
           ),
 
+          // attribution widget
+          MapAttributionWidget(isDarkMode: isDark),
+
           // filter
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            top: _showFilterBar
+                ? 8
+                : -100, // kToolbarHeight rausfahren nach oben
+            left: 8,
+            right: 8,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 300),
+              opacity: _showFilterBar ? 1.0 : 0.0,
+              child: Card(
+                elevation: 6,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: FilterBar(
+                    showOnlyAvailable: _showOnlyAvailable,
+                    onChangeAvailable: (val) {
+                      setState(() => _showOnlyAvailable = val);
+                      _loadParking();
+                    },
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          /*
           Positioned(
             top: 12,
             left: 12,
@@ -381,6 +428,7 @@ class _HomeScreenState extends State<HomeScreen> {
               },
             ),
           ),
+          */
 
           // overlay zum laden
           if (_loading)
@@ -388,7 +436,8 @@ class _HomeScreenState extends State<HomeScreen> {
               child: ColoredBox(
                 color: Color(0x11000000),
                 child: Center(
-                  child: SpinKitFadingCircle(size: 48, color: Colors.white),
+                  child: SpinKitFadingCircle(
+                      size: 48, color: Color.fromRGBO(255, 102, 255, 255)),
                 ),
               ),
             ),
