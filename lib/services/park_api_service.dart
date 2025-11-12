@@ -35,8 +35,8 @@ class ParkApiService {
           if (ps != null) cachedSites.add(ps);
         }
         if (cachedSites.isNotEmpty) {
-          print(
-              '[ParkApiService] using cached parking sites: ${cachedSites.length}');
+          //print(
+          //    '[ParkApiService] using cached parking sites: ${cachedSites.length}');
           return cachedSites;
         }
       }
@@ -47,8 +47,8 @@ class ParkApiService {
       cancelToken: cancelToken,
     );
 
-    print(
-        '[ParkApiService] status: ${res.statusCode}, type: ${res.data.runtimeType}');
+    //print(
+    //     '[ParkApiService] status: ${res.statusCode}, type: ${res.data.runtimeType}');
 
     dynamic data = res.data;
     if (data is String) {
@@ -60,7 +60,7 @@ class ParkApiService {
 
     // fall: top-level List
     if (data is List) {
-      print('[ParkApiService] top-level List length: ${data.length}');
+      //print('[ParkApiService] top-level List length: ${data.length}');
       for (final item in data) {
         if (item is! Map) continue;
         final map = Map<String, dynamic>.from(item as Map);
@@ -70,7 +70,7 @@ class ParkApiService {
           rawForCache.add(map);
         }
       }
-      print('[ParkApiService] parsed sites from top-level list: ${out.length}');
+      //print('[ParkApiService] parsed sites from top-level list: ${out.length}');
       if (out.isNotEmpty) {
         await _cache.saveParkingSites(rawForCache);
       }
@@ -79,12 +79,12 @@ class ParkApiService {
 
     // fall: Map / Objekt
     if (data is Map<String, dynamic>) {
-      print('[ParkApiService] map keys: ${data.keys.toList()}');
+      //print('[ParkApiService] map keys: ${data.keys.toList()}');
 
       // Wrapper "items" + "total_count"
       if (data['items'] is List) {
         final items = data['items'] as List;
-        print('[ParkApiService] items length: ${items.length}');
+        //print('[ParkApiService] items length: ${items.length}');
 
         for (final item in items) {
           if (item is! Map) continue;
@@ -106,11 +106,11 @@ class ParkApiService {
               }
             }
 
-            // ggf. später: ppl['parkingSpace'] ...
+            // todo: ppl['parkingSpace'] ...
           }
         }
 
-        print('[ParkApiService] parsed sites from items: ${out.length}');
+        //print('[ParkApiService] parsed sites from items: ${out.length}');
         if (out.isNotEmpty) {
           await _cache.saveParkingSites(rawForCache);
           return out;
@@ -120,7 +120,7 @@ class ParkApiService {
       // GeoJSON
       if (data['features'] is List) {
         final features = data['features'] as List;
-        print('[ParkApiService] features length: ${features.length}');
+        //print('[ParkApiService] features length: ${features.length}');
         for (final f in features) {
           if (f is! Map) continue;
           final m = Map<String, dynamic>.from(f as Map);
@@ -138,7 +138,7 @@ class ParkApiService {
             rawForCache.add(merged);
           }
         }
-        print('[ParkApiService] parsed sites from features: ${out.length}');
+        //print('[ParkApiService] parsed sites from features: ${out.length}');
         if (out.isNotEmpty) {
           await _cache.saveParkingSites(rawForCache);
           return out;
@@ -148,8 +148,8 @@ class ParkApiService {
       for (final entry in data.entries) {
         final v = entry.value;
         if (v is List && v.isNotEmpty && v.first is Map) {
-          print(
-              '[ParkApiService] trying list at key: ${entry.key}, length: ${v.length}');
+          //print(
+          //    '[ParkApiService] trying list at key: ${entry.key}, length: ${v.length}');
           for (final item in v) {
             if (item is! Map) continue;
             final map = Map<String, dynamic>.from(item as Map);
@@ -159,8 +159,8 @@ class ParkApiService {
               rawForCache.add(map);
             }
           }
-          print(
-              '[ParkApiService] parsed sites from key ${entry.key}: ${out.length}');
+          //print(
+          //    '[ParkApiService] parsed sites from key ${entry.key}: ${out.length}');
           if (out.isNotEmpty) {
             await _cache.saveParkingSites(rawForCache);
             return out;
@@ -168,7 +168,7 @@ class ParkApiService {
         }
       }
 
-      print('[ParkApiService] no suitable list found in map');
+      //print('[ParkApiService] no suitable list found in map');
     }
 
     return out;

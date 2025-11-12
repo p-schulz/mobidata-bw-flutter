@@ -1,5 +1,7 @@
-# mobidata_bw_flutter
+# mobidata_bw_flutter - Flutter client for MobiData BW
 Flutter-App für den mobilen Zugriff auf digitale Mobilitätsdaten von MobiData BW. Mehr Informationen auf der offiziellen Webseite: https://mobidata-bw.de/
+
+Diese App entstand während des Codevember Hackathons 2025: https://codevember.org/
 
 ## Datenquellen und Lizenzen
 Datenpaket: MobiData BW; NVBW – Nahverkehrsgesellschaft Baden-Württemberg mbH
@@ -15,7 +17,7 @@ Es nutzt öffentliche, frei lizenzierte Daten, die über die Plattform MobiData 
 
 ## Integrations Status
 
-Die App befindet sich noch im Aufbau. Bisher sind folgende Dienste verfügbar:
+Die App befindet sich noch im Aufbau, Dienste und Kategorien werden noch hinzugefügt. Bisher sind folgende Dienste verfügbar:
 
 - Parkplätze
 - CarSharing

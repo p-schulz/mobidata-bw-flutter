@@ -81,12 +81,15 @@ class _HomeScreenState extends State<HomeScreen> {
   // carsharing
   List<CarsharingOffer> _carsharingOffers = [];
   bool _filterOnlyWithCars = false;
+  CarsharingOffer? _selectedCarsharingOffer;
 
   // bikesharing
   List<BikesharingStation> _bikesharingStations = [];
+  BikesharingStation? _selectedBikesharingStation;
 
   // scooter
   List<ScooterVehicle> _scooterVehicles = [];
+  ScooterVehicle? _selectedScooterVehicle;
 
   // transit
 
@@ -248,10 +251,14 @@ class _HomeScreenState extends State<HomeScreen> {
             _carsharingOffers = [];
             _bikesharingStations = [];
             _scooterVehicles = [];
+            _selectedCarsharingOffer = null;
+            _selectedBikesharingStation = null;
+            _selectedScooterVehicle = null;
           });
           break;
 
         case DatasetCategory.carsharing:
+          final previousCarId = _selectedCarsharingOffer?.id;
           final all = await _sharingApiService.fetchCarsharingOffers(
             bounds: bounds,
             forceRefresh: forceRefresh,
@@ -262,14 +269,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 o.lon >= bounds.west &&
                 o.lon <= bounds.east;
           }).toList();
+          CarsharingOffer? preservedCar;
+          if (previousCarId != null) {
+            for (final offer in filtered) {
+              if (offer.id == previousCarId) {
+                preservedCar = offer;
+                break;
+              }
+            }
+          }
           setState(() {
             _carsharingOffers = filtered;
             _parkingSites = [];
             _bikesharingStations = [];
             _scooterVehicles = [];
+            _selectedSite = null;
+            _selectedCarsharingOffer = preservedCar;
+            _selectedBikesharingStation = null;
+            _selectedScooterVehicle = null;
           });
           break;
         case DatasetCategory.bikesharing:
+          final previousBikeId = _selectedBikesharingStation?.id;
           final allBikes = await _sharingApiService.fetchBikesharingStations(
             bounds: bounds,
             forceRefresh: forceRefresh,
@@ -280,14 +301,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 o.lon >= bounds.west &&
                 o.lon <= bounds.east;
           }).toList();
+          BikesharingStation? preservedBike;
+          if (previousBikeId != null) {
+            for (final station in filteredBikes) {
+              if (station.id == previousBikeId) {
+                preservedBike = station;
+                break;
+              }
+            }
+          }
           setState(() {
             _bikesharingStations = filteredBikes;
             _carsharingOffers = [];
             _parkingSites = [];
             _scooterVehicles = [];
+            _selectedSite = null;
+            _selectedCarsharingOffer = null;
+            _selectedBikesharingStation = preservedBike;
+            _selectedScooterVehicle = null;
           });
           break;
         case DatasetCategory.scooters:
+          final previousScooterId = _selectedScooterVehicle?.id;
           final allScooters = await _sharingApiService.fetchScooterVehicles(
             bounds: bounds,
             forceRefresh: forceRefresh,
@@ -298,11 +333,24 @@ class _HomeScreenState extends State<HomeScreen> {
                 o.lon >= bounds.west &&
                 o.lon <= bounds.east;
           }).toList();
+          ScooterVehicle? preservedScooter;
+          if (previousScooterId != null) {
+            for (final scooter in filteredScooters) {
+              if (scooter.id == previousScooterId) {
+                preservedScooter = scooter;
+                break;
+              }
+            }
+          }
           setState(() {
             _scooterVehicles = filteredScooters;
             _bikesharingStations = [];
             _carsharingOffers = [];
             _parkingSites = [];
+            _selectedSite = null;
+            _selectedCarsharingOffer = null;
+            _selectedBikesharingStation = null;
+            _selectedScooterVehicle = preservedScooter;
           });
           break;
         case DatasetCategory.transit:
@@ -446,19 +494,102 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showCarsharingInfo(CarsharingOffer o) {
+  void _showCarsharingDetails(CarsharingOffer offer) {
     showModalBottomSheet(
       context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          runSpacing: 8,
-          children: [
-            Text(o.name, style: Theme.of(context).textTheme.titleLarge),
-            Text('Anbieter: ${o.provider}'),
-            Text('Fahrzeugtyp: ${o.vehicleType}'),
-            Text('Verfügbar: ${o.availableVehicles}'),
-          ],
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(offer.name, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text('Anbieter: ${offer.provider}'),
+              Text('Fahrzeugtyp: ${offer.vehicleType}'),
+              Text('Verfügbare Fahrzeuge: ${offer.availableVehicles}'),
+              Text('Vermietung möglich: ${offer.isRentingAllowed ? 'ja' : 'nein'}'),
+              Text('Position: ${offer.lat.toStringAsFixed(5)}, ${offer.lon.toStringAsFixed(5)}'),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                  label: const Text('Schließen'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showBikesharingDetails(BikesharingStation station) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(station.name, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text('Anbieter: ${station.provider}'),
+              Text('Verfügbare Räder: ${station.availableVehicles}'),
+              Text('Verleih möglich: ${station.isRentingAllowed ? 'ja' : 'nein'}'),
+              Text('Position: ${station.lat.toStringAsFixed(5)}, ${station.lon.toStringAsFixed(5)}'),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                  label: const Text('Schließen'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showScooterDetails(ScooterVehicle vehicle) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(vehicle.vehicleType,
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              Text('Anbieter: ${vehicle.provider}'),
+              if (vehicle.batteryPercent != null)
+                Text(
+                    'Akku: ${(vehicle.batteryPercent! * 100).round()}% (${vehicle.rangeMeters?.toStringAsFixed(0) ?? '?'} m)'),
+              Text('Reserviert: ${vehicle.isReserved ? 'ja' : 'nein'}'),
+              Text('Aktiv: ${vehicle.isDisabled ? 'nein' : 'ja'}'),
+              Text('Position: ${vehicle.lat.toStringAsFixed(5)}, ${vehicle.lon.toStringAsFixed(5)}'),
+              const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: ElevatedButton.icon(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                  label: const Text('Schließen'),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -537,15 +668,47 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Marker> _buildCarsharingMarkers() {
     return _carsharingOffers.map((o) {
       final point = LatLng(o.lat, o.lon);
-      final color = o.availableVehicles > 0 ? Colors.green : Colors.grey;
+      final color =
+          o.availableVehicles > 0 ? Colors.green.shade600 : Colors.grey.shade600;
+      final isSelected = _selectedCarsharingOffer?.id == o.id;
 
       return Marker(
-        width: 32,
-        height: 32,
+        width: 36,
+        height: 36,
         point: point,
         child: GestureDetector(
-          onTap: () => _showCarsharingInfo(o),
-          child: Icon(Icons.directions_car, color: color, size: 26),
+          onTap: () {
+            setState(() {
+              final alreadySelected = _selectedCarsharingOffer?.id == o.id;
+              _selectedCarsharingOffer = alreadySelected ? null : o;
+              _selectedBikesharingStation = null;
+              _selectedScooterVehicle = null;
+              _selectedSite = null;
+            });
+          },
+          child: AnimatedScale(
+            scale: isSelected ? 1.2 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? Colors.orange.shade700 : color,
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                    color: Color(0x44000000),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(6),
+              child: const Icon(
+                Icons.directions_car,
+                size: 18,
+                color: Colors.white,
+              ),
+            ),
+          ),
         ),
       );
     }).toList();
@@ -556,18 +719,48 @@ class _HomeScreenState extends State<HomeScreen> {
       final point = LatLng(station.lat, station.lon);
       final color =
           station.availableVehicles > 0 ? Colors.green.shade600 : Colors.red;
+      final isSelected = _selectedBikesharingStation?.id == station.id;
 
       return Marker(
-        width: 32,
-        height: 32,
+        width: 34,
+        height: 34,
         point: point,
-        child: Tooltip(
-          message:
-              '${station.name} (${station.availableVehicles} Bikes verfügbar)',
-          child: Icon(
-            Icons.pedal_bike,
-            color: color,
-            size: 24,
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedBikesharingStation =
+                  isSelected ? null : station;
+              _selectedCarsharingOffer = null;
+              _selectedScooterVehicle = null;
+              _selectedSite = null;
+            });
+          },
+          child: Tooltip(
+            message:
+                '${station.name} (${station.availableVehicles} Bikes verfügbar)',
+            child: AnimatedScale(
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? Colors.orange.shade700 : color,
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                      color: Color(0x33000000),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(6),
+                child: const Icon(
+                  Icons.pedal_bike,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
           ),
         ),
       );
@@ -588,21 +781,191 @@ class _HomeScreenState extends State<HomeScreen> {
       final batteryText = vehicle.batteryPercent != null
           ? ' - ${(vehicle.batteryPercent! * 100).round()}%'
           : '';
+      final isSelected = _selectedScooterVehicle?.id == vehicle.id;
 
       return Marker(
-        width: 30,
-        height: 30,
+        width: 34,
+        height: 34,
         point: point,
-        child: Tooltip(
-          message: '${vehicle.vehicleType}$batteryText',
-          child: Icon(
-            Icons.electric_scooter,
-            color: color,
-            size: 24,
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedScooterVehicle =
+                  isSelected ? null : vehicle;
+              _selectedCarsharingOffer = null;
+              _selectedBikesharingStation = null;
+              _selectedSite = null;
+            });
+          },
+          child: Tooltip(
+            message: '${vehicle.vehicleType}$batteryText',
+            child: AnimatedScale(
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? Colors.orange.shade700 : color,
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                      color: Color(0x33000000),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(6),
+                child: const Icon(
+                  Icons.electric_scooter,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
           ),
         ),
       );
     }).toList();
+  }
+
+  Widget? _buildActiveInfoCard() {
+    if (_selectedSite != null) {
+      return ParkingInfoCard(
+        site: _selectedSite!,
+        onClose: () {
+          setState(() {
+            _selectedSite = null;
+          });
+        },
+      );
+    }
+
+    if (_selectedCarsharingOffer != null) {
+      final offer = _selectedCarsharingOffer!;
+      return _buildSharingInfoCard(
+        icon: Icons.directions_car,
+        title: offer.name,
+        details: [
+          Text('Anbieter: ${offer.provider}'),
+          Text('Verfügbar: ${offer.availableVehicles}'),
+          Text('Typ: ${offer.vehicleType}'),
+          Text(
+              '${offer.lat.toStringAsFixed(4)}, ${offer.lon.toStringAsFixed(4)}'),
+        ],
+        onDetails: () => _showCarsharingDetails(offer),
+        onClose: () {
+          setState(() {
+            _selectedCarsharingOffer = null;
+          });
+        },
+      );
+    }
+
+    if (_selectedBikesharingStation != null) {
+      final station = _selectedBikesharingStation!;
+      return _buildSharingInfoCard(
+        icon: Icons.pedal_bike,
+        title: station.name,
+        details: [
+          Text('Anbieter: ${station.provider}'),
+          Text('Verfügbar: ${station.availableVehicles}'),
+          Text(
+              '${station.lat.toStringAsFixed(4)}, ${station.lon.toStringAsFixed(4)}'),
+        ],
+        onDetails: () => _showBikesharingDetails(station),
+        onClose: () {
+          setState(() {
+            _selectedBikesharingStation = null;
+          });
+        },
+      );
+    }
+
+    if (_selectedScooterVehicle != null) {
+      final scooter = _selectedScooterVehicle!;
+      final battery = scooter.batteryPercent != null
+          ? '${(scooter.batteryPercent! * 100).round()}%'
+          : 'unbekannt';
+      return _buildSharingInfoCard(
+        icon: Icons.electric_scooter,
+        title: scooter.vehicleType,
+        details: [
+          Text('Anbieter: ${scooter.provider}'),
+          Text('Akku: $battery'),
+          Text(
+              '${scooter.lat.toStringAsFixed(4)}, ${scooter.lon.toStringAsFixed(4)}'),
+        ],
+        onDetails: () => _showScooterDetails(scooter),
+        onClose: () {
+          setState(() {
+            _selectedScooterVehicle = null;
+          });
+        },
+      );
+    }
+
+    return null;
+  }
+
+  Widget _buildSharingInfoCard({
+    required IconData icon,
+    required String title,
+    required List<Widget> details,
+    required VoidCallback onClose,
+    VoidCallback? onDetails,
+  }) {
+    final theme = Theme.of(context);
+    final detailStyle =
+        theme.textTheme.bodySmall ?? const TextStyle(fontSize: 12);
+    return Card(
+      elevation: 6,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: details
+                        .map((w) => DefaultTextStyle(
+                              style: detailStyle,
+                              child: w,
+                            ))
+                        .toList(),
+                  ),
+                ],
+              ),
+            ),
+            if (onDetails != null)
+              TextButton(
+                onPressed: onDetails,
+                child: const Text('Details'),
+              ),
+            const SizedBox(width: 8),
+            IconButton(
+              onPressed: onClose,
+              icon: const Icon(Icons.close),
+              tooltip: 'Schließen',
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _applyFiltersForCurrentCategory() {
@@ -660,6 +1023,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final isSelected = _selectedSite?.id == s.id;
       final color = _statusColor(s);
     }).toList();
+    final infoCard = _buildActiveInfoCard();
 
     return Scaffold(
       key: _scaffoldKey,
@@ -800,20 +1164,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-          // info fenster
-          if (_selectedSite != null)
+          if (infoCard != null)
             Positioned(
               left: 12,
               right: 12,
               bottom: 24,
-              child: ParkingInfoCard(
-                site: _selectedSite!,
-                onClose: () {
-                  setState(() {
-                    _selectedSite = null;
-                  });
-                },
-              ),
+              child: infoCard,
             ),
         ],
       ),
