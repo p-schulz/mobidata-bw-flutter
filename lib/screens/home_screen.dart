@@ -10,11 +10,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/park_api_service.dart';
 import '../services/carsharing_api_service.dart';
 
+import '../models/categories.dart';
 import '../models/app_theme_setting.dart';
 import '../models/parking_site.dart';
 import '../models/carsharing_offer.dart';
-import '../models/bikesharing_offer.dart';
-import '../models/scooter_offer.dart';
+import '../models/bikesharing_station.dart';
+import '../models/scooter_vehicle.dart';
 import '../models/transit.dart';
 import '../models/charging_station.dart';
 import '../models/construction_site.dart';
@@ -26,17 +27,6 @@ import '../widgets/imprint_sheet.dart';
 import '../widgets/filter_bar.dart';
 import '../widgets/map_attribution.dart';
 import '../widgets/parking_info_card.dart';
-
-enum DatasetCategory {
-  parking,
-  carsharing,
-  bikesharing,
-  scooters,
-  transit,
-  charging,
-  construction,
-  bicycleNetwork,
-}
 
 class HomeScreen extends StatefulWidget {
   final AppThemeSetting appThemeSetting;
@@ -69,29 +59,34 @@ class _HomeScreenState extends State<HomeScreen> {
   // daten und karte
   final MapController _mapController = MapController();
   final ParkApiService _parkApiService = ParkApiService();
-  final CarsharingApiService _carsharingApi = CarsharingApiService();
+  final SharingApiService _sharingApiService = SharingApiService();
 
   LatLng _center = const LatLng(48.5216, 9.0576);
   double _zoom = 13.0;
+  bool _mapReady = false;
 
   bool _loading = false;
   String? _error;
   Timer? _debounce;
-  bool _showFilterBar = false;
+  bool _showFilterBar = true;
 
   DatasetCategory _selectedCategory = DatasetCategory.parking;
 
   // parkplätze
-  List<ParkingSite> _sites = [];
+  List<ParkingSite> _parkingSites = [];
   ParkingSite? _selectedSite;
   bool _showOnlyAvailable = false;
+  bool _filterOnlyFreeParking = false;
 
   // carsharing
   List<CarsharingOffer> _carsharingOffers = [];
+  bool _filterOnlyWithCars = false;
 
   // bikesharing
+  List<BikesharingStation> _bikesharingStations = [];
 
   // scooter
+  List<ScooterVehicle> _scooterVehicles = [];
 
   // transit
 
@@ -116,8 +111,8 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
     });
-
-    _loadParking();
+    _loadDataForCurrentCategory();
+    //_loadParking();
   }
 
   @override
@@ -126,7 +121,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // lade einstellungen
+  // einstellungen laden
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -189,14 +184,26 @@ class _HomeScreenState extends State<HomeScreen> {
         _center = LatLng(pos.latitude, pos.longitude);
         _zoom = 13.0;
       });
-      _mapController.move(_center, _zoom);
+      _moveMapIfReady();
     } catch (_) {
       // ignorieren
     }
   }
 
-  // live karten ausschnitt verwenden
+  void _moveMapIfReady() {
+    if (!_mapReady) return;
+    _mapController.move(_center, _zoom);
+  }
+
+  // live karten ausschnitt
   LatLngBounds _currentBounds() {
+    if (!_mapReady) {
+      return LatLngBounds(
+        LatLng(_center.latitude - 0.05, _center.longitude - 0.05),
+        LatLng(_center.latitude + 0.05, _center.longitude + 0.05),
+      );
+    }
+
     final bounds = _mapController.camera.visibleBounds;
     return bounds ??
         LatLngBounds(
@@ -214,6 +221,108 @@ class _HomeScreenState extends State<HomeScreen> {
       // kurze ruhepause
       _loadParking();
     });
+  }
+
+  Future<void> _loadDataForCurrentCategory({bool forceRefresh = false}) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final bounds = _currentBounds();
+
+      switch (_selectedCategory) {
+        case DatasetCategory.parking:
+          final all = await _parkApiService.fetchParkingSites(
+              forceRefresh: forceRefresh);
+          final filtered = all.where((s) {
+            if (s.lat == null || s.lon == null) return false;
+            return s.lat! >= bounds.south &&
+                s.lat! <= bounds.north &&
+                s.lon! >= bounds.west &&
+                s.lon! <= bounds.east;
+          }).toList();
+          setState(() {
+            _parkingSites = filtered;
+            _carsharingOffers = [];
+            _bikesharingStations = [];
+            _scooterVehicles = [];
+          });
+          break;
+
+        case DatasetCategory.carsharing:
+          final all = await _sharingApiService.fetchCarsharingOffers(
+            bounds: bounds,
+            forceRefresh: forceRefresh,
+          );
+          final filtered = all.where((o) {
+            return o.lat >= bounds.south &&
+                o.lat <= bounds.north &&
+                o.lon >= bounds.west &&
+                o.lon <= bounds.east;
+          }).toList();
+          setState(() {
+            _carsharingOffers = filtered;
+            _parkingSites = [];
+            _bikesharingStations = [];
+            _scooterVehicles = [];
+          });
+          break;
+        case DatasetCategory.bikesharing:
+          final allBikes = await _sharingApiService.fetchBikesharingStations(
+            bounds: bounds,
+            forceRefresh: forceRefresh,
+          );
+          final filteredBikes = allBikes.where((o) {
+            return o.lat >= bounds.south &&
+                o.lat <= bounds.north &&
+                o.lon >= bounds.west &&
+                o.lon <= bounds.east;
+          }).toList();
+          setState(() {
+            _bikesharingStations = filteredBikes;
+            _carsharingOffers = [];
+            _parkingSites = [];
+            _scooterVehicles = [];
+          });
+          break;
+        case DatasetCategory.scooters:
+          final allScooters = await _sharingApiService.fetchScooterVehicles(
+            bounds: bounds,
+            forceRefresh: forceRefresh,
+          );
+          final filteredScooters = allScooters.where((o) {
+            return o.lat >= bounds.south &&
+                o.lat <= bounds.north &&
+                o.lon >= bounds.west &&
+                o.lon <= bounds.east;
+          }).toList();
+          setState(() {
+            _scooterVehicles = filteredScooters;
+            _bikesharingStations = [];
+            _carsharingOffers = [];
+            _parkingSites = [];
+          });
+          break;
+        case DatasetCategory.transit:
+          break;
+        case DatasetCategory.charging:
+          break;
+        case DatasetCategory.construction:
+          break;
+        case DatasetCategory.bicycleNetwork:
+          break;
+      }
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+      });
+    }
   }
 
   Future<void> _loadParking() async {
@@ -255,7 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
       print('[HomeScreen] filtered sites in bbox: ${filtered.length}');
 
       setState(() {
-        _sites = filtered;
+        _parkingSites = filtered;
       });
     } catch (e) {
       setState(() {
@@ -289,7 +398,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final all = await _carsharingApi.fetchCarsharingOffers(
+      final all = await _sharingApiService.fetchCarsharingOffers(
+        bounds: _currentBounds(),
         forceRefresh: forceRefresh,
       );
       final b = _currentBounds();
@@ -314,53 +424,241 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _showParkingInfo(ParkingSite s) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(
+          runSpacing: 8,
+          children: [
+            Text(s.name ?? 'Parkplatz',
+                style: Theme.of(context).textTheme.titleLarge),
+            if (s.totalSpaces != null)
+              Text('Stellplätze gesamt: ${s.totalSpaces}'),
+            if (s.availableSpaces != null) Text('frei: ${s.availableSpaces}'),
+            if (s.isOpenNow != null)
+              Text(s.isOpenNow! ? 'Geöffnet' : 'Geschlossen'),
+            if (s.lastUpdate != null) Text('Stand: ${s.lastUpdate}'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCarsharingInfo(CarsharingOffer o) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16),
+        child: Wrap(
+          runSpacing: 8,
+          children: [
+            Text(o.name, style: Theme.of(context).textTheme.titleLarge),
+            Text('Anbieter: ${o.provider}'),
+            Text('Fahrzeugtyp: ${o.vehicleType}'),
+            Text('Verfügbar: ${o.availableVehicles}'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  List<Marker> _buildMarkersForCategory() {
+    switch (_selectedCategory) {
+      case DatasetCategory.parking:
+        return _buildParkingMarkers();
+      case DatasetCategory.carsharing:
+        return _buildCarsharingMarkers();
+      case DatasetCategory.bikesharing:
+        return _buildBikesharingMarkers();
+      case DatasetCategory.scooters:
+        return _buildScooterMarkers();
+      case DatasetCategory.transit:
+        return List<Marker>.empty();
+      case DatasetCategory.charging:
+        return List<Marker>.empty();
+      case DatasetCategory.construction:
+        return List<Marker>.empty();
+      case DatasetCategory.bicycleNetwork:
+        return List<Marker>.empty();
+    }
+  }
+
+  List<Marker> _buildParkingMarkers() {
+    return _parkingSites
+        .map((s) {
+          final lat = s.lat, lon = s.lon;
+          if (lat == null || lon == null) return null;
+
+          final isSelected = _selectedSite?.id == s.id;
+          final color = _statusColor(s);
+
+          return Marker(
+            width: 36,
+            height: 36,
+            point: LatLng(s.lat!, s.lon!),
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedSite = s;
+                });
+              },
+              child: AnimatedScale(
+                scale: isSelected ? 1.2 : 1.0,
+                duration: const Duration(milliseconds: 150),
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isSelected ? Colors.orange.shade700 : color,
+                    boxShadow: const [
+                      BoxShadow(
+                        blurRadius: 4,
+                        offset: Offset(0, 2),
+                        color: Color(0x55000000),
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.all(4),
+                  child: const Icon(
+                    Icons.local_parking,
+                    size: 18,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          );
+        })
+        .whereType<Marker>()
+        .toList();
+  }
+
+  List<Marker> _buildCarsharingMarkers() {
+    return _carsharingOffers.map((o) {
+      final point = LatLng(o.lat, o.lon);
+      final color = o.availableVehicles > 0 ? Colors.green : Colors.grey;
+
+      return Marker(
+        width: 32,
+        height: 32,
+        point: point,
+        child: GestureDetector(
+          onTap: () => _showCarsharingInfo(o),
+          child: Icon(Icons.directions_car, color: color, size: 26),
+        ),
+      );
+    }).toList();
+  }
+
+  List<Marker> _buildBikesharingMarkers() {
+    return _bikesharingStations.map((station) {
+      final point = LatLng(station.lat, station.lon);
+      final color =
+          station.availableVehicles > 0 ? Colors.green.shade600 : Colors.red;
+
+      return Marker(
+        width: 32,
+        height: 32,
+        point: point,
+        child: Tooltip(
+          message:
+              '${station.name} (${station.availableVehicles} Bikes verfügbar)',
+          child: Icon(
+            Icons.pedal_bike,
+            color: color,
+            size: 24,
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  List<Marker> _buildScooterMarkers() {
+    return _scooterVehicles.map((vehicle) {
+      final point = LatLng(vehicle.lat, vehicle.lon);
+      Color color;
+      if (vehicle.isDisabled) {
+        color = Colors.grey;
+      } else if ((vehicle.batteryPercent ?? 1) < 0.2) {
+        color = Colors.orange;
+      } else {
+        color = Colors.lightGreen;
+      }
+      final batteryText = vehicle.batteryPercent != null
+          ? ' - ${(vehicle.batteryPercent! * 100).round()}%'
+          : '';
+
+      return Marker(
+        width: 30,
+        height: 30,
+        point: point,
+        child: Tooltip(
+          message: '${vehicle.vehicleType}$batteryText',
+          child: Icon(
+            Icons.electric_scooter,
+            color: color,
+            size: 24,
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  void _applyFiltersForCurrentCategory() {
+    final bounds = _currentBounds();
+
+    switch (_selectedCategory) {
+      case DatasetCategory.parking:
+        final all = _parkingSites; // oder separate Variable
+        var filtered = all.where((s) {
+          if (s.lat == null || s.lon == null) return false;
+          final inBox = s.lat! >= bounds.south &&
+              s.lat! <= bounds.north &&
+              s.lon! >= bounds.west &&
+              s.lon! <= bounds.east;
+          if (!inBox) return false;
+          if (_filterOnlyFreeParking) {
+            if (s.availableSpaces == null) return false;
+            return s.availableSpaces! > 0;
+          }
+          return true;
+        }).toList();
+        setState(() => _parkingSites = filtered);
+        break;
+
+      case DatasetCategory.carsharing:
+        final all = _carsharingOffers;
+        final filtered = all.where((o) {
+          final inBox = o.lat >= bounds.south &&
+              o.lat <= bounds.north &&
+              o.lon >= bounds.west &&
+              o.lon <= bounds.east;
+          if (!inBox) return false;
+          if (_filterOnlyWithCars) {
+            return o.availableVehicles > 0;
+          }
+          return true;
+        }).toList();
+        setState(() => _carsharingOffers = filtered);
+        break;
+      default:
+        break;
+    }
+  }
+
   ////////////////////////////////////////
   /// MAIN SCREEN
   ////////////////////////////////////////
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final markers = _sites.where((s) => s.lat != null && s.lon != null).map((
+    final markers =
+        _parkingSites.where((s) => s.lat != null && s.lon != null).map((
       s,
     ) {
       final isSelected = _selectedSite?.id == s.id;
       final color = _statusColor(s);
-
-      return Marker(
-        width: 36,
-        height: 36,
-        point: LatLng(s.lat!, s.lon!),
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedSite = s;
-            });
-          },
-          child: AnimatedScale(
-            scale: isSelected ? 1.2 : 1.0,
-            duration: const Duration(milliseconds: 150),
-            child: Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: isSelected ? Colors.orange.shade700 : color,
-                boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 4,
-                    offset: Offset(0, 2),
-                    color: Color(0x55000000),
-                  ),
-                ],
-              ),
-              padding: const EdgeInsets.all(4),
-              child: const Icon(
-                Icons.local_parking,
-                size: 18,
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ),
-      );
     }).toList();
 
     return Scaffold(
@@ -392,6 +690,13 @@ class _HomeScreenState extends State<HomeScreen> {
               initialCenter: _center,
               backgroundColor: Colors.grey.shade900,
               initialZoom: _zoom,
+              onMapReady: () {
+                setState(() {
+                  _mapReady = true;
+                });
+                _moveMapIfReady();
+                _loadDataForCurrentCategory(forceRefresh: true);
+              },
               onPositionChanged: (pos, hasGesture) {
                 _center = pos.center ?? _center;
                 _zoom = pos.zoom ?? _zoom;
@@ -411,7 +716,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 subdomains: const ['a', 'b', 'c'],
                 userAgentPackageName: 'org.codevember.mobidata_bw_flutter',
               ),
-              MarkerLayer(markers: markers),
+              //MarkerLayer(markers: markers),
+              MarkerLayer(
+                markers: _buildMarkersForCategory(),
+              ),
             ],
           ),
 
@@ -441,6 +749,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       setState(() => _showOnlyAvailable = val);
                       _loadParking();
                     },
+                    category: _selectedCategory,
+                    showOnlyFreeParking: _filterOnlyFreeParking,
+                    onToggleOnlyFreeParking: (val) {
+                      setState(() => _filterOnlyFreeParking = val);
+                      _applyFiltersForCurrentCategory();
+                    },
+                    showOnlyWithCars: _filterOnlyWithCars,
+                    onToggleOnlyWithCars: (val) {
+                      setState(() => _filterOnlyWithCars = val);
+                      _applyFiltersForCurrentCategory();
+                    },
                   ),
                 ),
               ),
@@ -462,45 +781,8 @@ class _HomeScreenState extends State<HomeScreen> {
           // legende
           Positioned(
             left: 8,
-            bottom: 8,
-            child: Builder(
-              builder: (context) {
-                final isDark = Theme.of(context).brightness == Brightness.dark;
-                final bgColor = isDark
-                    ? Colors.black.withOpacity(0.6)
-                    : Colors.white.withOpacity(0.8);
-                final textColor = isDark ? Colors.white : Colors.black87;
-
-                return Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: bgColor,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: isDark ? Colors.white24 : Colors.black26,
-                      width: 0.5,
-                    ),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.local_parking, color: Colors.green, size: 12),
-                      SizedBox(width: 4),
-                      Text('frei'),
-                      SizedBox(width: 12),
-                      Icon(Icons.local_parking, color: Colors.red, size: 12),
-                      SizedBox(width: 4),
-                      Text('belegt'),
-                      SizedBox(width: 12),
-                      Icon(Icons.local_parking, color: Colors.blue, size: 12),
-                      SizedBox(width: 4),
-                      Text('unbekannt'),
-                    ],
-                  ),
-                );
-              },
-            ),
+            bottom: 80,
+            child: _buildLegendForCategory(),
           ),
 
           // fehlerbox
@@ -539,12 +821,123 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   ////////////////////////////////////////
+  /// KARTEN LEGENDE
+  ////////////////////////////////////////
+
+  Widget _buildLegendForCategory() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final bgColor =
+        isDark ? Colors.black.withOpacity(0.6) : Colors.white.withOpacity(0.8);
+    final textColor = isDark ? Colors.white : Colors.black87;
+
+    switch (_selectedCategory) {
+      case DatasetCategory.parking:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.local_parking, color: Colors.green, size: 14),
+              const SizedBox(width: 4),
+              Text('frei', style: TextStyle(color: textColor, fontSize: 12)),
+              const SizedBox(width: 8),
+              const Icon(Icons.local_parking, color: Colors.red, size: 14),
+              const SizedBox(width: 4),
+              Text('belegt', style: TextStyle(color: textColor, fontSize: 12)),
+              const SizedBox(width: 8),
+              const Icon(Icons.local_parking, color: Colors.blue, size: 14),
+              const SizedBox(width: 4),
+              Text('Status unbekannt',
+                  style: TextStyle(color: textColor, fontSize: 12)),
+            ],
+          ),
+        );
+
+      case DatasetCategory.carsharing:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.directions_car, color: Colors.green, size: 14),
+              const SizedBox(width: 4),
+              Text('Fahrzeuge verfügbar',
+                  style: TextStyle(color: textColor, fontSize: 12)),
+              const SizedBox(width: 8),
+              const Icon(Icons.directions_car, color: Colors.grey, size: 14),
+              const SizedBox(width: 4),
+              Text('nicht verfügbar',
+                  style: TextStyle(color: textColor, fontSize: 12)),
+            ],
+          ),
+        );
+      case DatasetCategory.bikesharing:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.pedal_bike, color: Colors.green, size: 14),
+              const SizedBox(width: 4),
+              Text('verfügbar',
+                  style: TextStyle(color: textColor, fontSize: 12)),
+              const SizedBox(width: 8),
+              const Icon(Icons.pedal_bike, color: Colors.red, size: 14),
+              const SizedBox(width: 4),
+              Text('leer', style: TextStyle(color: textColor, fontSize: 12)),
+            ],
+          ),
+        );
+      case DatasetCategory.scooters:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.electric_scooter,
+                  color: Colors.lightGreen, size: 14),
+              const SizedBox(width: 4),
+              Text('fahrbereit',
+                  style: TextStyle(color: textColor, fontSize: 12)),
+              const SizedBox(width: 8),
+              const Icon(Icons.electric_scooter, color: Colors.orange, size: 14),
+              const SizedBox(width: 4),
+              Text('niedriger Akku',
+                  style: TextStyle(color: textColor, fontSize: 12)),
+            ],
+          ),
+        );
+
+      default:
+        return Container();
+    }
+  }
+
+  ////////////////////////////////////////
   /// KATEGORIEN LISTE
   ////////////////////////////////////////
 
   Widget _buildCategoryTile(DatasetCategory cat, String label) {
     final isSelected = _selectedCategory == cat;
-    final isEnabled = cat == DatasetCategory.parking;
+    final highlightColor =
+        isSelected ? Theme.of(context).colorScheme.primary : null;
 
     IconData icon;
     switch (cat) {
@@ -575,29 +968,26 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return ListTile(
-      leading: Icon(icon, color: isEnabled ? null : Colors.grey),
+      leading: Icon(icon, color: highlightColor),
       title: Text(
         label,
-        style: TextStyle(color: isEnabled ? null : Colors.grey),
+        style: TextStyle(color: highlightColor),
       ),
       selected: isSelected,
-      enabled: isEnabled,
-      onTap: !isEnabled
-          ? null
-          : () {
-              Navigator.of(context).pop();
-              setState(() {
-                _selectedCategory = cat;
-                // aktuell lädt _loadParking() nur parkplätze
-              });
-              _loadParking();
-            },
+      onTap: () => _onSelectCategory(cat),
     );
   }
 
   ////////////////////////////////////////
   /// DRAWER
   ////////////////////////////////////////
+  void _onSelectCategory(DatasetCategory cat) {
+    Navigator.of(context).pop();
+    setState(() {
+      _selectedCategory = cat;
+    });
+    _loadDataForCurrentCategory();
+  }
 
   Widget _buildMainDrawer(BuildContext context) {
     final theme = Theme.of(context);

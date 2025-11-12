@@ -1,5 +1,4 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -64,6 +63,8 @@ class CacheService {
   // keys
   static const String keyParkingSites = 'parking_sites_all';
   static const String keyCarsharingOffers = 'carsharing_offers_all';
+  static const String keyBikesharingStations = 'bikesharing_stations_all';
+  static const String keyScooterVehicles = 'scooter_vehicles_all';
   // todo: keys für andere dienste
 
   // parkplätze
@@ -86,5 +87,21 @@ class CacheService {
   }) =>
       loadJsonList(keyCarsharingOffers, maxAge: maxAge);
 
-  // todo: chaches für andere dienste
+  // bikesharing
+  Future<void> saveBikesharingStations(List<Map<String, dynamic>> list) =>
+      saveJsonList(keyBikesharingStations, list);
+
+  List<Map<String, dynamic>>? loadBikesharingStations({
+    Duration maxAge = const Duration(minutes: 10),
+  }) =>
+      loadJsonList(keyBikesharingStations, maxAge: maxAge);
+
+  // scooters
+  Future<void> saveScooterVehicles(List<Map<String, dynamic>> list) =>
+      saveJsonList(keyScooterVehicles, list);
+
+  List<Map<String, dynamic>>? loadScooterVehicles({
+    Duration maxAge = const Duration(minutes: 5),
+  }) =>
+      loadJsonList(keyScooterVehicles, maxAge: maxAge);
 }
