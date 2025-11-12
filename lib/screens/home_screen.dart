@@ -9,15 +9,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/park_api_service.dart';
 import '../services/sharing_api_service.dart';
+import '../services/transit_api_service.dart';
 
 import '../models/categories.dart';
 import '../models/app_theme_setting.dart';
 import '../models/parking_site.dart';
 import '../models/parking_spot.dart';
+import '../models/transit_stop.dart';
+import '../models/transit_departure.dart';
 import '../models/carsharing_offer.dart';
 import '../models/bikesharing_station.dart';
 import '../models/scooter_vehicle.dart';
-import '../models/transit.dart';
 import '../models/charging_station.dart';
 import '../models/construction_site.dart';
 import '../models/bicycle_network.dart';
@@ -28,6 +30,7 @@ import '../widgets/imprint_sheet.dart';
 import '../widgets/filter_bar.dart';
 import '../widgets/map_attribution.dart';
 import '../widgets/parking_info_card.dart';
+import '../widgets/transit_departure_board.dart';
 
 class HomeScreen extends StatefulWidget {
   final AppThemeSetting appThemeSetting;
@@ -61,8 +64,10 @@ class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
   final ParkApiService _parkApiService = ParkApiService();
   final SharingApiService _sharingApiService = SharingApiService();
+  final TransitApiService _transitApiService = TransitApiService();
 
-  LatLng _center = const LatLng(48.5216, 9.0576);
+  //LatLng _center = const LatLng(48.5216, 9.0576); // Tübingen, center of BW
+  LatLng _center = const LatLng(49.0068, 8.40365); // Karlsruhe
   double _zoom = 13.0;
   bool _mapReady = false;
 
@@ -84,6 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
   // carsharing
   List<CarsharingOffer> _carsharingOffers = [];
   bool _filterOnlyWithCars = false;
+  bool _filterOnlyBikeStationsWithBikes = false;
   CarsharingOffer? _selectedCarsharingOffer;
 
   // bikesharing
@@ -95,6 +101,15 @@ class _HomeScreenState extends State<HomeScreen> {
   ScooterVehicle? _selectedScooterVehicle;
 
   // transit
+  List<TransitStop> _allTransitStops = [];
+  List<TransitStop> _transitStops = [];
+  TransitStop? _selectedTransitStop;
+  List<TransitDeparture> _transitDepartures = [];
+  bool _loadingTransitDepartures = false;
+  String? _transitDeparturesError;
+  bool _showTransitStops = false;
+  List<TransitStop> _stationOnlyTransitCache = [];
+  List<TransitStop> _stationAndStopTransitCache = [];
 
   // charging
 
@@ -232,6 +247,9 @@ class _HomeScreenState extends State<HomeScreen> {
         case DatasetCategory.scooters:
           _loadDataForCurrentCategory();
           break;
+        case DatasetCategory.transit:
+          _loadTransit();
+          break;
         default:
           break;
       }
@@ -259,10 +277,14 @@ class _HomeScreenState extends State<HomeScreen> {
             _carsharingOffers = [];
             _bikesharingStations = [];
             _scooterVehicles = [];
+            _transitStops = [];
             _selectedCarsharingOffer = null;
             _selectedBikesharingStation = null;
             _selectedScooterVehicle = null;
             _selectedSpot = null;
+            _selectedTransitStop = null;
+            _transitDepartures = [];
+            _transitDeparturesError = null;
           });
           break;
 
@@ -292,11 +314,15 @@ class _HomeScreenState extends State<HomeScreen> {
             _parkingSpots = [];
             _bikesharingStations = [];
             _scooterVehicles = [];
+            _transitStops = [];
             _selectedSite = null;
             _selectedSpot = null;
             _selectedCarsharingOffer = preservedCar;
             _selectedBikesharingStation = null;
             _selectedScooterVehicle = null;
+            _selectedTransitStop = null;
+            _transitDepartures = [];
+            _transitDeparturesError = null;
           });
           break;
         case DatasetCategory.bikesharing:
@@ -305,10 +331,15 @@ class _HomeScreenState extends State<HomeScreen> {
             bounds: bounds,
           );
           final filteredBikes = allBikes.where((o) {
-            return o.lat >= bounds.south &&
+            final inBounds = o.lat >= bounds.south &&
                 o.lat <= bounds.north &&
                 o.lon >= bounds.west &&
                 o.lon <= bounds.east;
+            if (!inBounds) return false;
+            if (_filterOnlyBikeStationsWithBikes && o.availableVehicles <= 0) {
+              return false;
+            }
+            return true;
           }).toList();
           BikesharingStation? preservedBike;
           if (previousBikeId != null) {
@@ -325,11 +356,15 @@ class _HomeScreenState extends State<HomeScreen> {
             _parkingSites = [];
             _parkingSpots = [];
             _scooterVehicles = [];
+            _transitStops = [];
             _selectedSite = null;
             _selectedSpot = null;
             _selectedCarsharingOffer = null;
             _selectedBikesharingStation = preservedBike;
             _selectedScooterVehicle = null;
+            _selectedTransitStop = null;
+            _transitDepartures = [];
+            _transitDeparturesError = null;
           });
           break;
         case DatasetCategory.scooters:
@@ -358,14 +393,19 @@ class _HomeScreenState extends State<HomeScreen> {
             _carsharingOffers = [];
             _parkingSites = [];
             _parkingSpots = [];
+            _transitStops = [];
             _selectedSite = null;
             _selectedSpot = null;
             _selectedCarsharingOffer = null;
             _selectedBikesharingStation = null;
             _selectedScooterVehicle = preservedScooter;
+            _selectedTransitStop = null;
+            _transitDepartures = [];
+            _transitDeparturesError = null;
           });
           break;
         case DatasetCategory.transit:
+          await _loadTransit(forceRefresh: true);
           break;
         case DatasetCategory.charging:
           break;
@@ -418,6 +458,65 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _loadTransit({bool forceRefresh = false}) async {
+    final includeStops = _showTransitStops;
+    List<TransitStop> cache =
+        includeStops ? _stationAndStopTransitCache : _stationOnlyTransitCache;
+    final needsFetch = forceRefresh || cache.isEmpty;
+
+    if (needsFetch) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+
+    try {
+      if (needsFetch) {
+        cache = await _transitApiService.fetchStations(
+          includeStops: includeStops,
+        );
+        if (includeStops) {
+          _stationAndStopTransitCache = cache;
+        } else {
+          _stationOnlyTransitCache = cache;
+        }
+      }
+
+      _allTransitStops = cache;
+      final filtered = _filterTransitStopsWithinBounds(cache, _currentBounds());
+
+      setState(() {
+        if (forceRefresh) {
+          _parkingSites = [];
+          _parkingSpots = [];
+          _carsharingOffers = [];
+          _bikesharingStations = [];
+          _scooterVehicles = [];
+          _selectedSite = null;
+          _selectedSpot = null;
+          _selectedCarsharingOffer = null;
+          _selectedBikesharingStation = null;
+          _selectedScooterVehicle = null;
+          _selectedTransitStop = null;
+          _transitDepartures = [];
+          _transitDeparturesError = null;
+        }
+        _transitStops = filtered;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (needsFetch) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
   List<ParkingSite> _filterParkingSitesWithinBounds(
     List<ParkingSite> sites,
     LatLngBounds bounds,
@@ -462,6 +561,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
       return true;
     }).toList();
+  }
+
+  List<TransitStop> _filterTransitStopsWithinBounds(
+    List<TransitStop> stops,
+    LatLngBounds bounds,
+  ) {
+    return stops
+        .where(
+          (stop) => _isWithinBounds(stop.lat, stop.lon, bounds),
+        )
+        .toList();
   }
 
   bool _isSpotAvailable(ParkingSpot spot) =>
@@ -518,6 +628,30 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _loadDeparturesForStop(TransitStop stop) async {
+    setState(() {
+      _loadingTransitDepartures = true;
+      _transitDeparturesError = null;
+    });
+
+    try {
+      final deps = await _transitApiService.fetchDeparturesForStation(stop.id,
+          limit: 20);
+      setState(() {
+        _transitDepartures = deps;
+      });
+    } catch (e) {
+      setState(() {
+        _transitDeparturesError = e.toString();
+        _transitDepartures = [];
+      });
+    } finally {
+      setState(() {
+        _loadingTransitDepartures = false;
+      });
+    }
   }
 
   void _showParkingSpotDetails(ParkingSpot spot) {
@@ -670,7 +804,7 @@ class _HomeScreenState extends State<HomeScreen> {
       case DatasetCategory.scooters:
         return _buildScooterMarkers();
       case DatasetCategory.transit:
-        return List<Marker>.empty();
+        return _buildTransitMarkers();
       case DatasetCategory.charging:
         return List<Marker>.empty();
       case DatasetCategory.construction:
@@ -784,6 +918,67 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
 
     return [...siteMarkers, ...spotMarkers];
+  }
+
+  List<Marker> _buildTransitMarkers() {
+    return _transitStops.map((stop) {
+      final isSelected = _selectedTransitStop?.id == stop.id;
+      return Marker(
+        width: 34,
+        height: 34,
+        point: LatLng(stop.lat, stop.lon),
+        child: GestureDetector(
+          onTap: () {
+            final alreadySelected = _selectedTransitStop?.id == stop.id;
+            setState(() {
+              _selectedTransitStop = alreadySelected ? null : stop;
+              _selectedSite = null;
+              _selectedSpot = null;
+              _selectedCarsharingOffer = null;
+              _selectedBikesharingStation = null;
+              _selectedScooterVehicle = null;
+              if (alreadySelected) {
+                _transitDepartures = [];
+                _transitDeparturesError = null;
+              } else {
+                _transitDepartures = [];
+                _transitDeparturesError = null;
+              }
+            });
+            if (!alreadySelected) {
+              _loadDeparturesForStop(stop);
+            }
+          },
+          child: Tooltip(
+            message: stop.name,
+            child: AnimatedScale(
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color:
+                      isSelected ? Colors.orange.shade700 : Colors.indigoAccent,
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                      color: Color(0x33000000),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(6),
+                child: const Icon(
+                  Icons.train,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
   }
 
   List<Marker> _buildCarsharingMarkers() {
@@ -981,6 +1176,24 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    if (_selectedTransitStop != null) {
+      final stop = _selectedTransitStop!;
+      return TransitDepartureBoard(
+        stop: stop,
+        departures: _transitDepartures,
+        loading: _loadingTransitDepartures,
+        error: _transitDeparturesError,
+        onRefresh: () => _loadDeparturesForStop(stop),
+        onClose: () {
+          setState(() {
+            _selectedTransitStop = null;
+            _transitDepartures = [];
+            _transitDeparturesError = null;
+          });
+        },
+      );
+    }
+
     if (_selectedCarsharingOffer != null) {
       final offer = _selectedCarsharingOffer!;
       return _buildSharingInfoCard(
@@ -1143,6 +1356,28 @@ class _HomeScreenState extends State<HomeScreen> {
         }).toList();
         setState(() => _carsharingOffers = filtered);
         break;
+      case DatasetCategory.bikesharing:
+        final filteredStations = _bikesharingStations.where((station) {
+          final inBox = station.lat >= bounds.south &&
+              station.lat <= bounds.north &&
+              station.lon >= bounds.west &&
+              station.lon <= bounds.east;
+          if (!inBox) return false;
+          if (_filterOnlyBikeStationsWithBikes &&
+              station.availableVehicles <= 0) {
+            return false;
+          }
+          return true;
+        }).toList();
+        setState(() => _bikesharingStations = filteredStations);
+        break;
+      case DatasetCategory.transit:
+        final sourceStops =
+            _allTransitStops.isNotEmpty ? _allTransitStops : _transitStops;
+        final filteredStops =
+            _filterTransitStopsWithinBounds(sourceStops, bounds);
+        setState(() => _transitStops = filteredStops);
+        break;
       default:
         break;
     }
@@ -1267,6 +1502,22 @@ class _HomeScreenState extends State<HomeScreen> {
                     onToggleOnlyWithCars: (val) {
                       setState(() => _filterOnlyWithCars = val);
                       _applyFiltersForCurrentCategory();
+                    },
+                    showOnlyBikeStationsWithBikes:
+                        _filterOnlyBikeStationsWithBikes,
+                    onToggleOnlyBikeStationsWithBikes: (val) {
+                      setState(() => _filterOnlyBikeStationsWithBikes = val);
+                      _applyFiltersForCurrentCategory();
+                    },
+                    showTransitStops: _showTransitStops,
+                    onToggleTransitStops: (val) {
+                      setState(() {
+                        _showTransitStops = val;
+                        _selectedTransitStop = null;
+                        _transitDepartures = [];
+                        _transitDeparturesError = null;
+                      });
+                      _loadTransit(forceRefresh: false);
                     },
                   ),
                 ),
@@ -1427,6 +1678,22 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(width: 4),
               Text('niedriger Akku',
                   style: TextStyle(color: textColor, fontSize: 12)),
+            ],
+          ),
+        );
+      case DatasetCategory.transit:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.train, color: Colors.indigo, size: 14),
+              const SizedBox(width: 4),
+              Text('Station', style: TextStyle(color: textColor, fontSize: 12)),
             ],
           ),
         );

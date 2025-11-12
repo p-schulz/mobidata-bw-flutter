@@ -23,3 +23,4 @@ Die App befindet sich noch im Aufbau, Dienste und Kategorien werden noch hinzuge
 - CarSharing
 - Bikesharing
 - E-Scooter
+- ÖPNV

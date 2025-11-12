@@ -19,6 +19,14 @@ class FilterBar extends StatelessWidget {
     this.showOnlyWithCars = false,
     this.onToggleOnlyWithCars,
 
+    // Bikesharing
+    this.showOnlyBikeStationsWithBikes = false,
+    this.onToggleOnlyBikeStationsWithBikes,
+
+    // Transit
+    this.showTransitStops = false,
+    this.onToggleTransitStops,
+
     // Reset
     this.onReset,
   });
@@ -32,6 +40,14 @@ class FilterBar extends StatelessWidget {
   // --- Carsharing ---
   final bool showOnlyWithCars;
   final ValueChanged<bool>? onToggleOnlyWithCars;
+
+  // --- Bikesharing ---
+  final bool showOnlyBikeStationsWithBikes;
+  final ValueChanged<bool>? onToggleOnlyBikeStationsWithBikes;
+
+  // --- Transit ---
+  final bool showTransitStops;
+  final ValueChanged<bool>? onToggleTransitStops;
 
   // --- Reset ---
   final VoidCallback? onReset;
@@ -60,6 +76,20 @@ class FilterBar extends StatelessWidget {
                 onSelected: onToggleOnlyWithCars,
               ),
 
+            if (category == DatasetCategory.bikesharing)
+              FilterChip(
+                label: const Text('nur Stationen mit Bikes'),
+                selected: showOnlyBikeStationsWithBikes,
+                onSelected: onToggleOnlyBikeStationsWithBikes,
+              ),
+
+            if (category == DatasetCategory.transit)
+              FilterChip(
+                label: const Text('Bahnhof + Haltestelle'),
+                selected: showTransitStops,
+                onSelected: onToggleTransitStops,
+              ),
+
             const Spacer(),
 
             // Reset-Button (Verhalten bleibt wie bisher)
@@ -74,51 +104,3 @@ class FilterBar extends StatelessWidget {
     );
   }
 }
-
-/*import 'package:flutter/material.dart';
-
-class FilterBar extends StatelessWidget {
-  final bool showOnlyAvailable;
-  final ValueChanged<bool> onChangeAvailable;
-
-  const FilterBar({
-    super.key,
-    required this.showOnlyAvailable,
-    required this.onChangeAvailable,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 4,
-      color: Colors.white.withOpacity(0.9),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Row(
-              children: [
-                FilterChip(
-                  label: const Text('Freie Parkplätze'),
-                  selected: showOnlyAvailable,
-                  onSelected: onChangeAvailable,
-                  selectedColor: Colors.green.shade200,
-                ),
-              ],
-            ),
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Aktualisieren',
-              onPressed: () {
-                onChangeAvailable(false);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-*/
