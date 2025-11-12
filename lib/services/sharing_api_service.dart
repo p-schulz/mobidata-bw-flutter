@@ -7,7 +7,6 @@ import 'package:latlong2/latlong.dart';
 import '../models/bikesharing_station.dart';
 import '../models/carsharing_offer.dart';
 import '../models/scooter_vehicle.dart';
-import 'cache_service.dart';
 
 class SharingApiService {
   SharingApiService()
@@ -23,7 +22,6 @@ class SharingApiService {
         );
 
   final Dio _dio;
-  final CacheService _cache = CacheService();
 
   static const _graphqlEndpoint = 'https://api.mobidata-bw.de/sharing/graphql';
   static const _defaultMinLat = 47.0;
@@ -33,17 +31,10 @@ class SharingApiService {
   static const _stationCountLimit = 5000;
   static const _vehicleCountLimit = 8000;
 
-  /// Fetches all car sharing stations within the default BW bounding box.
   Future<List<CarsharingOffer>> fetchCarsharingOffers({
-    LatLngBounds? bounds,
-    bool forceRefresh = false,
+    required LatLngBounds bounds,
     Set<String>? allowedSystemIds,
   }) async {
-    final cached = !forceRefresh ? _cache.loadCarsharingOffers() : null;
-    if (cached != null && cached.isNotEmpty) {
-      return _mapList(cached, CarsharingOffer.fromJson);
-    }
-
     final stations = await _fetchStations(
       bounds: bounds,
       formFactors: const ['CAR'],
@@ -51,28 +42,17 @@ class SharingApiService {
 
     final normalized = stations
         .where((s) => _isSystemAllowed(s, allowedSystemIds))
-        .map(_normalizeStationForCache)
+        .map(_normalizeStation)
         .whereType<Map<String, dynamic>>()
         .toList();
-
-    if (normalized.isNotEmpty) {
-      await _cache.saveCarsharingOffers(normalized);
-    }
 
     return _mapList(normalized, CarsharingOffer.fromJson);
   }
 
-  /// Fetches all bike sharing stations (includes cargo bikes).
   Future<List<BikesharingStation>> fetchBikesharingStations({
-    LatLngBounds? bounds,
-    bool forceRefresh = false,
+    required LatLngBounds bounds,
     Set<String>? allowedSystemIds,
   }) async {
-    final cached = !forceRefresh ? _cache.loadBikesharingStations() : null;
-    if (cached != null && cached.isNotEmpty) {
-      return _mapList(cached, BikesharingStation.fromJson);
-    }
-
     final stations = await _fetchStations(
       bounds: bounds,
       formFactors: const ['BICYCLE', 'CARGO_BICYCLE'],
@@ -80,28 +60,17 @@ class SharingApiService {
 
     final normalized = stations
         .where((s) => _isSystemAllowed(s, allowedSystemIds))
-        .map(_normalizeStationForCache)
+        .map(_normalizeStation)
         .whereType<Map<String, dynamic>>()
         .toList();
-
-    if (normalized.isNotEmpty) {
-      await _cache.saveBikesharingStations(normalized);
-    }
 
     return _mapList(normalized, BikesharingStation.fromJson);
   }
 
-  /// Fetches all scooters / mopeds as free-floating vehicles.
   Future<List<ScooterVehicle>> fetchScooterVehicles({
-    LatLngBounds? bounds,
-    bool forceRefresh = false,
+    required LatLngBounds bounds,
     Set<String>? allowedSystemIds,
   }) async {
-    final cached = !forceRefresh ? _cache.loadScooterVehicles() : null;
-    if (cached != null && cached.isNotEmpty) {
-      return _mapList(cached, ScooterVehicle.fromJson);
-    }
-
     final vehicles = await _fetchVehicles(
       bounds: bounds,
       formFactors: const ['SCOOTER_STANDING', 'SCOOTER_SEATED', 'MOPED'],
@@ -109,13 +78,9 @@ class SharingApiService {
 
     final normalized = vehicles
         .where((v) => _isSystemAllowed(v, allowedSystemIds))
-        .map(_normalizeVehicleForCache)
+        .map(_normalizeVehicle)
         .whereType<Map<String, dynamic>>()
         .toList();
-
-    if (normalized.isNotEmpty) {
-      await _cache.saveScooterVehicles(normalized);
-    }
 
     return _mapList(normalized, ScooterVehicle.fromJson);
   }
@@ -260,8 +225,7 @@ class SharingApiService {
     return data['data'] as Map<String, dynamic>?;
   }
 
-  Map<String, dynamic>? _normalizeStationForCache(
-      Map<String, dynamic> rawStation) {
+  Map<String, dynamic>? _normalizeStation(Map<String, dynamic> rawStation) {
     try {
       final system = rawStation['system'] as Map<String, dynamic>?;
       final providerName = _translated(system?['name']) ?? system?['id'];
@@ -269,8 +233,7 @@ class SharingApiService {
       final vehicles = rawStation['vehicleTypesAvailable'] as List<dynamic>?;
       final firstVehicle = vehicles?.firstWhere(
         (element) =>
-            element is Map<String, dynamic> &&
-            element['vehicleType'] != null,
+            element is Map<String, dynamic> && element['vehicleType'] != null,
         orElse: () => null,
       );
 
@@ -295,8 +258,7 @@ class SharingApiService {
     }
   }
 
-  Map<String, dynamic>? _normalizeVehicleForCache(
-      Map<String, dynamic> rawVehicle) {
+  Map<String, dynamic>? _normalizeVehicle(Map<String, dynamic> rawVehicle) {
     try {
       final system = rawVehicle['system'] as Map<String, dynamic>?;
       final providerName = _translated(system?['name']) ?? system?['id'];
@@ -374,5 +336,3 @@ class SharingApiService {
     );
   }
 }
-
-typedef CarsharingApiService = SharingApiService;

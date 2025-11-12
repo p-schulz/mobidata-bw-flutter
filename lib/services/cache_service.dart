@@ -62,13 +62,8 @@ class CacheService {
 
   // keys
   static const String keyParkingSites = 'parking_sites_all';
-  static const String keyCarsharingOffers = 'carsharing_offers_all';
-  static const String keyBikesharingStations = 'bikesharing_stations_all';
-  static const String keyScooterVehicles = 'scooter_vehicles_all';
-  // todo: keys für andere dienste
 
   // parkplätze
-
   Future<void> saveParkingSites(List<Map<String, dynamic>> list) =>
       saveJsonList(keyParkingSites, list);
 
@@ -77,31 +72,5 @@ class CacheService {
   }) =>
       loadJsonList(keyParkingSites, maxAge: maxAge);
 
-  // carsharing
-
-  Future<void> saveCarsharingOffers(List<Map<String, dynamic>> list) =>
-      saveJsonList(keyCarsharingOffers, list);
-
-  List<Map<String, dynamic>>? loadCarsharingOffers({
-    Duration maxAge = const Duration(minutes: 10),
-  }) =>
-      loadJsonList(keyCarsharingOffers, maxAge: maxAge);
-
-  // bikesharing
-  Future<void> saveBikesharingStations(List<Map<String, dynamic>> list) =>
-      saveJsonList(keyBikesharingStations, list);
-
-  List<Map<String, dynamic>>? loadBikesharingStations({
-    Duration maxAge = const Duration(minutes: 10),
-  }) =>
-      loadJsonList(keyBikesharingStations, maxAge: maxAge);
-
-  // scooters
-  Future<void> saveScooterVehicles(List<Map<String, dynamic>> list) =>
-      saveJsonList(keyScooterVehicles, list);
-
-  List<Map<String, dynamic>>? loadScooterVehicles({
-    Duration maxAge = const Duration(minutes: 5),
-  }) =>
-      loadJsonList(keyScooterVehicles, maxAge: maxAge);
+  // weitere caches bei Bedarf ergänzen
 }

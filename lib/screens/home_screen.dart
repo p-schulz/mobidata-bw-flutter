@@ -8,7 +8,7 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/park_api_service.dart';
-import '../services/carsharing_api_service.dart';
+import '../services/sharing_api_service.dart';
 
 import '../models/categories.dart';
 import '../models/app_theme_setting.dart';
@@ -115,7 +115,6 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     });
     _loadDataForCurrentCategory();
-    //_loadParking();
   }
 
   @override
@@ -221,12 +220,22 @@ class _HomeScreenState extends State<HomeScreen> {
     _debounce?.cancel();
 
     _debounce = Timer(const Duration(milliseconds: 600), () {
-      // kurze ruhepause
-      _loadParking();
+      switch (_selectedCategory) {
+        case DatasetCategory.parking:
+          _loadParking();
+          break;
+        case DatasetCategory.carsharing:
+        case DatasetCategory.bikesharing:
+        case DatasetCategory.scooters:
+          _loadDataForCurrentCategory();
+          break;
+        default:
+          break;
+      }
     });
   }
 
-  Future<void> _loadDataForCurrentCategory({bool forceRefresh = false}) async {
+  Future<void> _loadDataForCurrentCategory() async {
     setState(() {
       _loading = true;
       _error = null;
@@ -237,8 +246,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       switch (_selectedCategory) {
         case DatasetCategory.parking:
-          final all = await _parkApiService.fetchParkingSites(
-              forceRefresh: forceRefresh);
+          final all = await _parkApiService.fetchParkingSites();
           final filtered = all.where((s) {
             if (s.lat == null || s.lon == null) return false;
             return s.lat! >= bounds.south &&
@@ -261,7 +269,6 @@ class _HomeScreenState extends State<HomeScreen> {
           final previousCarId = _selectedCarsharingOffer?.id;
           final all = await _sharingApiService.fetchCarsharingOffers(
             bounds: bounds,
-            forceRefresh: forceRefresh,
           );
           final filtered = all.where((o) {
             return o.lat >= bounds.south &&
@@ -293,7 +300,6 @@ class _HomeScreenState extends State<HomeScreen> {
           final previousBikeId = _selectedBikesharingStation?.id;
           final allBikes = await _sharingApiService.fetchBikesharingStations(
             bounds: bounds,
-            forceRefresh: forceRefresh,
           );
           final filteredBikes = allBikes.where((o) {
             return o.lat >= bounds.south &&
@@ -325,7 +331,6 @@ class _HomeScreenState extends State<HomeScreen> {
           final previousScooterId = _selectedScooterVehicle?.id;
           final allScooters = await _sharingApiService.fetchScooterVehicles(
             bounds: bounds,
-            forceRefresh: forceRefresh,
           );
           final filteredScooters = allScooters.where((o) {
             return o.lat >= bounds.south &&
@@ -380,12 +385,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      print('[HomeScreen] loading parking…');
-
       // daten abrufen
       final allSites = await _parkApiService.fetchParkingSites();
-
-      print('[HomeScreen] got ${allSites.length} total');
 
       // kartenbegrenzung
       final b = _currentBounds();
@@ -408,8 +409,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
         return true;
       }).toList();
-
-      print('[HomeScreen] filtered sites in bbox: ${filtered.length}');
 
       setState(() {
         _parkingSites = filtered;
@@ -436,39 +435,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return Colors.grey.shade700;
       default:
         return Colors.blue.shade700;
-    }
-  }
-
-  Future<void> _loadCarsharing({bool forceRefresh = false}) async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-
-    try {
-      final all = await _sharingApiService.fetchCarsharingOffers(
-        bounds: _currentBounds(),
-        forceRefresh: forceRefresh,
-      );
-      final b = _currentBounds();
-      final filtered = all.where((o) {
-        return o.lat >= b.south &&
-            o.lat <= b.north &&
-            o.lon >= b.west &&
-            o.lon <= b.east;
-      }).toList();
-
-      setState(() {
-        _carsharingOffers = filtered;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-      });
-    } finally {
-      setState(() {
-        _loading = false;
-      });
     }
   }
 
@@ -509,8 +475,10 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('Anbieter: ${offer.provider}'),
               Text('Fahrzeugtyp: ${offer.vehicleType}'),
               Text('Verfügbare Fahrzeuge: ${offer.availableVehicles}'),
-              Text('Vermietung möglich: ${offer.isRentingAllowed ? 'ja' : 'nein'}'),
-              Text('Position: ${offer.lat.toStringAsFixed(5)}, ${offer.lon.toStringAsFixed(5)}'),
+              Text(
+                  'Vermietung möglich: ${offer.isRentingAllowed ? 'ja' : 'nein'}'),
+              Text(
+                  'Position: ${offer.lat.toStringAsFixed(5)}, ${offer.lon.toStringAsFixed(5)}'),
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
@@ -541,8 +509,10 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 8),
               Text('Anbieter: ${station.provider}'),
               Text('Verfügbare Räder: ${station.availableVehicles}'),
-              Text('Verleih möglich: ${station.isRentingAllowed ? 'ja' : 'nein'}'),
-              Text('Position: ${station.lat.toStringAsFixed(5)}, ${station.lon.toStringAsFixed(5)}'),
+              Text(
+                  'Verleih möglich: ${station.isRentingAllowed ? 'ja' : 'nein'}'),
+              Text(
+                  'Position: ${station.lat.toStringAsFixed(5)}, ${station.lon.toStringAsFixed(5)}'),
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
@@ -578,7 +548,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     'Akku: ${(vehicle.batteryPercent! * 100).round()}% (${vehicle.rangeMeters?.toStringAsFixed(0) ?? '?'} m)'),
               Text('Reserviert: ${vehicle.isReserved ? 'ja' : 'nein'}'),
               Text('Aktiv: ${vehicle.isDisabled ? 'nein' : 'ja'}'),
-              Text('Position: ${vehicle.lat.toStringAsFixed(5)}, ${vehicle.lon.toStringAsFixed(5)}'),
+              Text(
+                  'Position: ${vehicle.lat.toStringAsFixed(5)}, ${vehicle.lon.toStringAsFixed(5)}'),
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
@@ -668,8 +639,9 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Marker> _buildCarsharingMarkers() {
     return _carsharingOffers.map((o) {
       final point = LatLng(o.lat, o.lon);
-      final color =
-          o.availableVehicles > 0 ? Colors.green.shade600 : Colors.grey.shade600;
+      final color = o.availableVehicles > 0
+          ? Colors.green.shade600
+          : Colors.grey.shade600;
       final isSelected = _selectedCarsharingOffer?.id == o.id;
 
       return Marker(
@@ -728,8 +700,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: GestureDetector(
           onTap: () {
             setState(() {
-              _selectedBikesharingStation =
-                  isSelected ? null : station;
+              _selectedBikesharingStation = isSelected ? null : station;
               _selectedCarsharingOffer = null;
               _selectedScooterVehicle = null;
               _selectedSite = null;
@@ -790,8 +761,7 @@ class _HomeScreenState extends State<HomeScreen> {
         child: GestureDetector(
           onTap: () {
             setState(() {
-              _selectedScooterVehicle =
-                  isSelected ? null : vehicle;
+              _selectedScooterVehicle = isSelected ? null : vehicle;
               _selectedCarsharingOffer = null;
               _selectedBikesharingStation = null;
               _selectedSite = null;
@@ -1059,7 +1029,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   _mapReady = true;
                 });
                 _moveMapIfReady();
-                _loadDataForCurrentCategory(forceRefresh: true);
+                _loadDataForCurrentCategory();
               },
               onPositionChanged: (pos, hasGesture) {
                 _center = pos.center ?? _center;
@@ -1273,7 +1243,8 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('fahrbereit',
                   style: TextStyle(color: textColor, fontSize: 12)),
               const SizedBox(width: 8),
-              const Icon(Icons.electric_scooter, color: Colors.orange, size: 14),
+              const Icon(Icons.electric_scooter,
+                  color: Colors.orange, size: 14),
               const SizedBox(width: 4),
               Text('niedriger Akku',
                   style: TextStyle(color: textColor, fontSize: 12)),
