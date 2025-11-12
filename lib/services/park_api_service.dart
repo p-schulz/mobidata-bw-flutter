@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 
 import '../models/parking_site.dart';
+import '../models/parking_spot.dart';
 import '../services/cache_service.dart';
 
 class ParkApiService {
@@ -97,7 +98,18 @@ class ParkApiService {
               }
             }
 
-            // todo: ppl['parkingSpace'] ...
+            final spaces = ppl['parkingSpot'] ?? ppl['parkingSpace'];
+            if (spaces is List) {
+              for (final space in spaces) {
+                if (space is! Map) continue;
+                final spaceMap = Map<String, dynamic>.from(space as Map);
+                final ps = ParkingSite.fromJson(spaceMap);
+                if (ps != null) {
+                  out.add(ps);
+                  rawForCache.add(spaceMap);
+                }
+              }
+            }
           }
         }
 
@@ -152,8 +164,72 @@ class ParkApiService {
           }
         }
       }
+  }
+
+    return out;
+  }
+
+  Future<List<ParkingSpot>> fetchParkingSpots({
+    CancelToken? cancelToken,
+    bool forceRefresh = false,
+  }) async {
+    if (!forceRefresh) {
+      final cachedJson = _cache.loadParkingSpots();
+      if (cachedJson != null && cachedJson.isNotEmpty) {
+        final cachedSpots = <ParkingSpot>[];
+        for (final m in cachedJson) {
+          final spot = ParkingSpot.fromJson(m);
+          if (spot != null) cachedSpots.add(spot);
+        }
+        if (cachedSpots.isNotEmpty) {
+          return cachedSpots;
+        }
+      }
     }
 
+    final res = await _dio.get(
+      _parkingSpotsEndpoint,
+      cancelToken: cancelToken,
+    );
+
+    dynamic data = res.data;
+    if (data is String) {
+      data = jsonDecode(data);
+    }
+
+    final List<ParkingSpot> out = [];
+    final List<Map<String, dynamic>> rawForCache = [];
+
+    void handleList(List list) {
+      for (final item in list) {
+        if (item is! Map) continue;
+        final map = Map<String, dynamic>.from(item as Map);
+        final spot = ParkingSpot.fromJson(map);
+        if (spot != null) {
+          out.add(spot);
+          rawForCache.add(map);
+        }
+      }
+    }
+
+    if (data is List) {
+      handleList(data);
+    } else if (data is Map<String, dynamic>) {
+      if (data['items'] is List) {
+        handleList(data['items'] as List);
+      } else {
+        for (final entry in data.entries) {
+          final value = entry.value;
+          if (value is List) {
+            handleList(value);
+          }
+        }
+      }
+    }
+
+    if (out.isNotEmpty) {
+      await _cache.saveParkingSpots(rawForCache);
+    }
     return out;
   }
 }

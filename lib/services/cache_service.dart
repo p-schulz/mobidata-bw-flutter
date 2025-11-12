@@ -62,6 +62,7 @@ class CacheService {
 
   // keys
   static const String keyParkingSites = 'parking_sites_all';
+  static const String keyParkingSpots = 'parking_spots_all';
 
   // parkplätze
   Future<void> saveParkingSites(List<Map<String, dynamic>> list) =>
@@ -71,6 +72,14 @@ class CacheService {
     Duration maxAge = const Duration(minutes: 10),
   }) =>
       loadJsonList(keyParkingSites, maxAge: maxAge);
+
+  Future<void> saveParkingSpots(List<Map<String, dynamic>> list) =>
+      saveJsonList(keyParkingSpots, list);
+
+  List<Map<String, dynamic>>? loadParkingSpots({
+    Duration maxAge = const Duration(minutes: 5),
+  }) =>
+      loadJsonList(keyParkingSpots, maxAge: maxAge);
 
   // weitere caches bei Bedarf ergänzen
 }

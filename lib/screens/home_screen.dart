@@ -13,6 +13,7 @@ import '../services/sharing_api_service.dart';
 import '../models/categories.dart';
 import '../models/app_theme_setting.dart';
 import '../models/parking_site.dart';
+import '../models/parking_spot.dart';
 import '../models/carsharing_offer.dart';
 import '../models/bikesharing_station.dart';
 import '../models/scooter_vehicle.dart';
@@ -74,7 +75,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // parkplätze
   List<ParkingSite> _parkingSites = [];
+  List<ParkingSpot> _parkingSpots = [];
   ParkingSite? _selectedSite;
+  ParkingSpot? _selectedSpot;
   bool _showOnlyAvailable = false;
   bool _filterOnlyFreeParking = false;
 
@@ -246,22 +249,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
       switch (_selectedCategory) {
         case DatasetCategory.parking:
-          final all = await _parkApiService.fetchParkingSites();
-          final filtered = all.where((s) {
-            if (s.lat == null || s.lon == null) return false;
-            return s.lat! >= bounds.south &&
-                s.lat! <= bounds.north &&
-                s.lon! >= bounds.west &&
-                s.lon! <= bounds.east;
-          }).toList();
+          final sites = await _parkApiService.fetchParkingSites();
+          final spots = await _parkApiService.fetchParkingSpots();
+          final filteredSites = _filterParkingSitesWithinBounds(sites, bounds);
+          final filteredSpots = _filterParkingSpotsWithinBounds(spots, bounds);
           setState(() {
-            _parkingSites = filtered;
+            _parkingSites = filteredSites;
+            _parkingSpots = filteredSpots;
             _carsharingOffers = [];
             _bikesharingStations = [];
             _scooterVehicles = [];
             _selectedCarsharingOffer = null;
             _selectedBikesharingStation = null;
             _selectedScooterVehicle = null;
+            _selectedSpot = null;
           });
           break;
 
@@ -288,9 +289,11 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() {
             _carsharingOffers = filtered;
             _parkingSites = [];
+            _parkingSpots = [];
             _bikesharingStations = [];
             _scooterVehicles = [];
             _selectedSite = null;
+            _selectedSpot = null;
             _selectedCarsharingOffer = preservedCar;
             _selectedBikesharingStation = null;
             _selectedScooterVehicle = null;
@@ -320,8 +323,10 @@ class _HomeScreenState extends State<HomeScreen> {
             _bikesharingStations = filteredBikes;
             _carsharingOffers = [];
             _parkingSites = [];
+            _parkingSpots = [];
             _scooterVehicles = [];
             _selectedSite = null;
+            _selectedSpot = null;
             _selectedCarsharingOffer = null;
             _selectedBikesharingStation = preservedBike;
             _selectedScooterVehicle = null;
@@ -352,7 +357,9 @@ class _HomeScreenState extends State<HomeScreen> {
             _bikesharingStations = [];
             _carsharingOffers = [];
             _parkingSites = [];
+            _parkingSpots = [];
             _selectedSite = null;
+            _selectedSpot = null;
             _selectedCarsharingOffer = null;
             _selectedBikesharingStation = null;
             _selectedScooterVehicle = preservedScooter;
@@ -387,31 +394,17 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       // daten abrufen
       final allSites = await _parkApiService.fetchParkingSites();
+      final allSpots = await _parkApiService.fetchParkingSpots();
 
       // kartenbegrenzung
       final b = _currentBounds();
 
-      final filtered = allSites.where((s) {
-        if (s.lat == null || s.lon == null) return false;
-
-        if (!(s.lat! >= b.south &&
-            s.lat! <= b.north &&
-            s.lon! >= b.west &&
-            s.lon! <= b.east)) {
-          return false;
-        }
-
-        if (_showOnlyAvailable) {
-          if (!(s.availableSpaces != null && s.availableSpaces! > 0)) {
-            return false;
-          }
-        }
-
-        return true;
-      }).toList();
+      final filteredSites = _filterParkingSitesWithinBounds(allSites, b);
+      final filteredSpots = _filterParkingSpotsWithinBounds(allSpots, b);
 
       setState(() {
-        _parkingSites = filtered;
+        _parkingSites = filteredSites;
+        _parkingSpots = filteredSpots;
       });
     } catch (e) {
       setState(() {
@@ -425,6 +418,61 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  List<ParkingSite> _filterParkingSitesWithinBounds(
+    List<ParkingSite> sites,
+    LatLngBounds bounds,
+  ) {
+    return sites.where((s) {
+      final lat = s.lat;
+      final lon = s.lon;
+      if (lat == null || lon == null) return false;
+
+      if (!_isWithinBounds(lat, lon, bounds)) {
+        return false;
+      }
+
+      if (_showOnlyAvailable &&
+          !(s.availableSpaces != null && s.availableSpaces! > 0)) {
+        return false;
+      }
+
+      if (_filterOnlyFreeParking) {
+        if (s.availableSpaces == null || s.availableSpaces! <= 0) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+  }
+
+  List<ParkingSpot> _filterParkingSpotsWithinBounds(
+    List<ParkingSpot> spots,
+    LatLngBounds bounds,
+  ) {
+    return spots.where((spot) {
+      if (!_isWithinBounds(spot.lat, spot.lon, bounds)) {
+        return false;
+      }
+
+      if ((_showOnlyAvailable || _filterOnlyFreeParking) &&
+          !_isSpotAvailable(spot)) {
+        return false;
+      }
+
+      return true;
+    }).toList();
+  }
+
+  bool _isSpotAvailable(ParkingSpot spot) =>
+      (spot.realtimeStatus ?? '').toUpperCase() == 'AVAILABLE';
+
+  bool _isWithinBounds(double lat, double lon, LatLngBounds bounds) =>
+      lat >= bounds.south &&
+      lat <= bounds.north &&
+      lon >= bounds.west &&
+      lon <= bounds.east;
+
   Color _statusColor(ParkingSite s) {
     switch (s.status) {
       case 'free':
@@ -435,6 +483,18 @@ class _HomeScreenState extends State<HomeScreen> {
         return Colors.grey.shade700;
       default:
         return Colors.blue.shade700;
+    }
+  }
+
+  Color _parkingSpotColor(ParkingSpot spot) {
+    switch ((spot.realtimeStatus ?? '').toUpperCase()) {
+      case 'AVAILABLE':
+        return Colors.green.shade700;
+      case 'OCCUPIED':
+      case 'UNAVAILABLE':
+        return Colors.red.shade700;
+      default:
+        return Colors.blueGrey.shade700;
     }
   }
 
@@ -455,6 +515,39 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(s.isOpenNow! ? 'Geöffnet' : 'Geschlossen'),
             if (s.lastUpdate != null) Text('Stand: ${s.lastUpdate}'),
           ],
+        ),
+      ),
+    );
+  }
+
+  void _showParkingSpotDetails(ParkingSpot spot) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(spot.name, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 8),
+              if (spot.address != null) Text('Adresse: ${spot.address}'),
+              if (spot.realtimeStatus != null)
+                Text('Status: ${spot.realtimeStatus}'),
+              Text('Echtzeitdaten: ${spot.hasRealtimeData ? 'ja' : 'nein'}'),
+              if (spot.staticDataUpdatedAt != null)
+                Text('Stand: ${spot.staticDataUpdatedAt}'),
+              if (spot.realtimeDataUpdatedAt != null)
+                Text('Live: ${spot.realtimeDataUpdatedAt}'),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () => Navigator.of(context).pop(),
+                icon: const Icon(Icons.close),
+                label: const Text('Schließen'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -588,7 +681,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Marker> _buildParkingMarkers() {
-    return _parkingSites
+    final siteMarkers = _parkingSites
         .map((s) {
           final lat = s.lat, lon = s.lon;
           if (lat == null || lon == null) return null;
@@ -599,11 +692,16 @@ class _HomeScreenState extends State<HomeScreen> {
           return Marker(
             width: 36,
             height: 36,
-            point: LatLng(s.lat!, s.lon!),
+            point: LatLng(lat, lon),
             child: GestureDetector(
               onTap: () {
                 setState(() {
-                  _selectedSite = s;
+                  final alreadySelected = _selectedSite?.id == s.id;
+                  _selectedSite = alreadySelected ? null : s;
+                  _selectedSpot = null;
+                  _selectedCarsharingOffer = null;
+                  _selectedBikesharingStation = null;
+                  _selectedScooterVehicle = null;
                 });
               },
               child: AnimatedScale(
@@ -634,6 +732,58 @@ class _HomeScreenState extends State<HomeScreen> {
         })
         .whereType<Marker>()
         .toList();
+
+    final spotMarkers = _parkingSpots.map((spot) {
+      final isSelected = _selectedSpot?.id == spot.id;
+      final color = _parkingSpotColor(spot);
+      return Marker(
+        width: 32,
+        height: 32,
+        point: LatLng(spot.lat, spot.lon),
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              final alreadySelected = _selectedSpot?.id == spot.id;
+              _selectedSpot = alreadySelected ? null : spot;
+              _selectedSite = null;
+              _selectedCarsharingOffer = null;
+              _selectedBikesharingStation = null;
+              _selectedScooterVehicle = null;
+            });
+          },
+          child: Tooltip(
+            message: spot.realtimeStatus != null
+                ? '${spot.name} (${spot.realtimeStatus})'
+                : spot.name,
+            child: AnimatedScale(
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? Colors.orange.shade700 : color,
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                      color: Color(0x33000000),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(5),
+                child: const Icon(
+                  Icons.push_pin,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+
+    return [...siteMarkers, ...spotMarkers];
   }
 
   List<Marker> _buildCarsharingMarkers() {
@@ -810,6 +960,27 @@ class _HomeScreenState extends State<HomeScreen> {
       );
     }
 
+    if (_selectedSpot != null) {
+      final spot = _selectedSpot!;
+      return _buildSharingInfoCard(
+        icon: Icons.push_pin,
+        title: spot.name,
+        details: [
+          if (spot.realtimeStatus != null)
+            Text('Status: ${spot.realtimeStatus}'),
+          if (spot.address != null) Text(spot.address!),
+          Text(
+              '${spot.lat.toStringAsFixed(4)}, ${spot.lon.toStringAsFixed(4)}'),
+        ],
+        onDetails: () => _showParkingSpotDetails(spot),
+        onClose: () {
+          setState(() {
+            _selectedSpot = null;
+          });
+        },
+      );
+    }
+
     if (_selectedCarsharingOffer != null) {
       final offer = _selectedCarsharingOffer!;
       return _buildSharingInfoCard(
@@ -943,21 +1114,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
     switch (_selectedCategory) {
       case DatasetCategory.parking:
-        final all = _parkingSites; // oder separate Variable
-        var filtered = all.where((s) {
-          if (s.lat == null || s.lon == null) return false;
-          final inBox = s.lat! >= bounds.south &&
-              s.lat! <= bounds.north &&
-              s.lon! >= bounds.west &&
-              s.lon! <= bounds.east;
-          if (!inBox) return false;
-          if (_filterOnlyFreeParking) {
-            if (s.availableSpaces == null) return false;
-            return s.availableSpaces! > 0;
-          }
-          return true;
-        }).toList();
-        setState(() => _parkingSites = filtered);
+        final filteredSites = _filterParkingSitesWithinBounds(
+          _parkingSites,
+          bounds,
+        );
+        final filteredSpots = _filterParkingSpotsWithinBounds(
+          _parkingSpots,
+          bounds,
+        );
+        setState(() {
+          _parkingSites = filteredSites;
+          _parkingSpots = filteredSpots;
+        });
         break;
 
       case DatasetCategory.carsharing:
@@ -1024,6 +1192,12 @@ class _HomeScreenState extends State<HomeScreen> {
               initialCenter: _center,
               backgroundColor: Colors.grey.shade900,
               initialZoom: _zoom,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.drag |
+                    InteractiveFlag.pinchZoom |
+                    InteractiveFlag.doubleTapZoom |
+                    InteractiveFlag.scrollWheelZoom,
+              ),
               onMapReady: () {
                 setState(() {
                   _mapReady = true;
@@ -1179,6 +1353,11 @@ class _HomeScreenState extends State<HomeScreen> {
               const Icon(Icons.local_parking, color: Colors.blue, size: 14),
               const SizedBox(width: 4),
               Text('Status unbekannt',
+                  style: TextStyle(color: textColor, fontSize: 12)),
+              const SizedBox(width: 8),
+              const Icon(Icons.push_pin, color: Colors.teal, size: 14),
+              const SizedBox(width: 4),
+              Text('Einzelplatz',
                   style: TextStyle(color: textColor, fontSize: 12)),
             ],
           ),
