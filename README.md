@@ -12,3 +12,12 @@ Sonstige Lizenzen (z.B. Kartendienste und verwendete Software-Bibliotheken) sind
 Dieses Projekt steht in keinem offiziellen Zusammenhang mit der NVBW – Nahverkehrsgesellschaft Baden-Württemberg mbH.
 Es nutzt öffentliche, frei lizenzierte Daten, die über die Plattform MobiData BW bereitgestellt werden (Open Data).
 „MobiData BW“ ist eine Marke der NVBW mbH.
+
+## Integrations Status
+
+Die App befindet sich noch im Aufbau. Bisher sind folgende Dienste verfügbar:
+
+- Parkplätze
+- CarSharing
+- Bikesharing
+- E-Scooter
