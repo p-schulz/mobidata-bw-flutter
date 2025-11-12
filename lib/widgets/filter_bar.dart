@@ -26,6 +26,16 @@ class FilterBar extends StatelessWidget {
     // Transit
     this.showTransitStops = false,
     this.onToggleTransitStops,
+    this.transitShowBus = true,
+    this.transitShowTram = true,
+    this.transitShowSuburban = true,
+    this.transitShowMetro = true,
+    this.transitShowRail = true,
+    this.onToggleTransitBus,
+    this.onToggleTransitTram,
+    this.onToggleTransitSuburban,
+    this.onToggleTransitMetro,
+    this.onToggleTransitRail,
 
     // Reset
     this.onReset,
@@ -48,51 +58,110 @@ class FilterBar extends StatelessWidget {
   // --- Transit ---
   final bool showTransitStops;
   final ValueChanged<bool>? onToggleTransitStops;
+  final bool transitShowBus;
+  final bool transitShowTram;
+  final bool transitShowSuburban;
+  final bool transitShowMetro;
+  final bool transitShowRail;
+  final ValueChanged<bool>? onToggleTransitBus;
+  final ValueChanged<bool>? onToggleTransitTram;
+  final ValueChanged<bool>? onToggleTransitSuburban;
+  final ValueChanged<bool>? onToggleTransitMetro;
+  final ValueChanged<bool>? onToggleTransitRail;
 
   // --- Reset ---
   final VoidCallback? onReset;
 
   @override
   Widget build(BuildContext context) {
+    final chips = <Widget>[];
+
+    if (category == DatasetCategory.parking) {
+      chips.add(
+        FilterChip(
+          label: const Text('nur freie Parkplätze'),
+          selected: showOnlyFreeParking,
+          onSelected: onToggleOnlyFreeParking,
+        ),
+      );
+    }
+
+    if (category == DatasetCategory.carsharing) {
+      chips.add(
+        FilterChip(
+          label: const Text('nur Stationen mit Fahrzeugen'),
+          selected: showOnlyWithCars,
+          onSelected: onToggleOnlyWithCars,
+        ),
+      );
+    }
+
+    if (category == DatasetCategory.bikesharing) {
+      chips.add(
+        FilterChip(
+          label: const Text('nur Stationen mit Bikes'),
+          selected: showOnlyBikeStationsWithBikes,
+          onSelected: onToggleOnlyBikeStationsWithBikes,
+        ),
+      );
+    }
+
+    if (category == DatasetCategory.transit) {
+      chips.add(
+        FilterChip(
+          label: const Text('Bahnhof + Haltestelle'),
+          selected: showTransitStops,
+          onSelected: onToggleTransitStops,
+        ),
+      );
+      chips.addAll([
+        FilterChip(
+          label: const Text('Bus'),
+          selected: transitShowBus,
+          onSelected: onToggleTransitBus,
+        ),
+        FilterChip(
+          label: const Text('Tram'),
+          selected: transitShowTram,
+          onSelected: onToggleTransitTram,
+        ),
+        FilterChip(
+          label: const Text('S-Bahn'),
+          selected: transitShowSuburban,
+          onSelected: onToggleTransitSuburban,
+        ),
+        FilterChip(
+          label: const Text('U-Bahn'),
+          selected: transitShowMetro,
+          onSelected: onToggleTransitMetro,
+        ),
+        FilterChip(
+          label: const Text('Zug / Fernverkehr'),
+          selected: transitShowRail,
+          onSelected: onToggleTransitRail,
+        ),
+      ]);
+    }
+
+    if (chips.isEmpty) {
+      chips.add(const SizedBox.shrink());
+    }
+
     return Card(
       elevation: 4,
       margin: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Kategorie-spezifische Chips
-            if (category == DatasetCategory.parking)
-              FilterChip(
-                label: const Text('nur freie Parkplätze'),
-                selected: showOnlyFreeParking,
-                onSelected: onToggleOnlyFreeParking,
+            Expanded(
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: chips,
               ),
-
-            if (category == DatasetCategory.carsharing)
-              FilterChip(
-                label: const Text('nur Stationen mit Fahrzeugen'),
-                selected: showOnlyWithCars,
-                onSelected: onToggleOnlyWithCars,
-              ),
-
-            if (category == DatasetCategory.bikesharing)
-              FilterChip(
-                label: const Text('nur Stationen mit Bikes'),
-                selected: showOnlyBikeStationsWithBikes,
-                onSelected: onToggleOnlyBikeStationsWithBikes,
-              ),
-
-            if (category == DatasetCategory.transit)
-              FilterChip(
-                label: const Text('Bahnhof + Haltestelle'),
-                selected: showTransitStops,
-                onSelected: onToggleTransitStops,
-              ),
-
-            const Spacer(),
-
-            // Reset-Button (Verhalten bleibt wie bisher)
+            ),
             IconButton(
               tooltip: 'Zurücksetzen',
               icon: const Icon(Icons.restart_alt),

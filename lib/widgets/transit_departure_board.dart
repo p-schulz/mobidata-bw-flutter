@@ -10,6 +10,11 @@ class TransitDepartureBoard extends StatelessWidget {
   final String? error;
   final VoidCallback onClose;
   final VoidCallback? onRefresh;
+  final TransitDeparture? selectedDeparture;
+  final ValueChanged<TransitDeparture>? onSelectDeparture;
+  final bool loadingVehicles;
+  final String? vehicleError;
+  final int? vehicleCount;
 
   const TransitDepartureBoard({
     super.key,
@@ -19,6 +24,11 @@ class TransitDepartureBoard extends StatelessWidget {
     required this.error,
     required this.onClose,
     this.onRefresh,
+    this.selectedDeparture,
+    this.onSelectDeparture,
+    this.loadingVehicles = false,
+    this.vehicleError,
+    this.vehicleCount,
   });
 
   @override
@@ -103,18 +113,72 @@ class TransitDepartureBoard extends StatelessWidget {
                 child: Text('Keine Abfahrten gefunden'),
               )
             else
-              _DepartureTable(departures: departures),
+              _DepartureTable(
+                departures: departures,
+                selectedDeparture: selectedDeparture,
+                onSelect: onSelectDeparture,
+              ),
+            if (!loading)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: _buildVehicleStatus(),
+              ),
           ],
         ),
       ),
     );
   }
+
+  Widget _buildVehicleStatus() {
+    if (vehicleError != null) {
+      return Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red, size: 16),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              vehicleError!,
+              style: const TextStyle(color: Colors.red, fontSize: 12),
+            ),
+          ),
+        ],
+      );
+    }
+    if (loadingVehicles) {
+      return Row(
+        children: const [
+          SizedBox(
+            width: 16,
+            height: 16,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+          SizedBox(width: 6),
+          Text('Lade Fahrzeugpositionen …', style: TextStyle(fontSize: 12)),
+        ],
+      );
+    }
+    if (selectedDeparture != null && vehicleCount != null) {
+      return Text(
+        vehicleCount! > 0
+            ? '$vehicleCount Fahrzeuge auf dieser Fahrt auf der Karte'
+            : 'Keine Fahrzeugdaten verfügbar',
+        style: const TextStyle(fontSize: 12),
+      );
+    }
+    return const SizedBox.shrink();
+  }
 }
 
 class _DepartureTable extends StatelessWidget {
   final List<TransitDeparture> departures;
+  final TransitDeparture? selectedDeparture;
+  final ValueChanged<TransitDeparture>? onSelect;
 
-  const _DepartureTable({required this.departures});
+  const _DepartureTable({
+    required this.departures,
+    this.selectedDeparture,
+    this.onSelect,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -138,7 +202,11 @@ class _DepartureTable extends StatelessWidget {
             itemCount: departures.length,
             itemBuilder: (context, index) {
               final dep = departures[index];
-              return Row(
+              final isSelected = selectedDeparture != null &&
+                  selectedDeparture!.id == dep.id &&
+                  selectedDeparture!.scheduledDeparture ==
+                      dep.scheduledDeparture;
+              final row = Row(
                 children: [
                   _cell(_formatTime(dep), flex: 2),
                   _cell(
@@ -149,10 +217,24 @@ class _DepartureTable extends StatelessWidget {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
-                  _cell(dep.routeShortName, flex: 2),
+                  _cell(dep.routeShortName ?? '-', flex: 2),
                   _cell(dep.headsign ?? '-', flex: 4),
                   _cell(dep.platform ?? '-', flex: 2),
                 ],
+              );
+              final content = Container(
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Colors.orange.shade50
+                      : Colors.transparent,
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: row,
+              );
+              if (onSelect == null) return content;
+              return InkWell(
+                onTap: () => onSelect!(dep),
+                child: content,
               );
             },
             separatorBuilder: (_, __) => const Divider(height: 6),
@@ -184,13 +266,26 @@ class _DepartureTable extends StatelessWidget {
   }
 
   static String _formatTime(TransitDeparture dep) {
-    final dt = dep.realtimeDeparture ?? dep.scheduledDeparture;
-    if (dt != null) {
-      final h = dt.hour.toString().padLeft(2, '0');
-      final m = dt.minute.toString().padLeft(2, '0');
-      return '$h:$m';
+    final scheduled = dep.scheduledDeparture;
+    final realtime = dep.realtimeDeparture;
+    if (scheduled == null && realtime == null) {
+      return '--';
     }
-    return '--';
+    final scheduledText = scheduled != null ? _formatClock(scheduled) : null;
+    final realtimeText = realtime != null ? _formatClock(realtime) : null;
+    if (scheduledText == null) {
+      return realtimeText ?? '--';
+    }
+    if (realtimeText == null || realtimeText == scheduledText) {
+      return scheduledText;
+    }
+    return '$scheduledText → $realtimeText';
+  }
+
+  static String _formatClock(DateTime time) {
+    final h = time.hour.toString().padLeft(2, '0');
+    final m = time.minute.toString().padLeft(2, '0');
+    return '$h:$m';
   }
 
   static String _formatDelay(TransitDeparture dep) {

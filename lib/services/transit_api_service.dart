@@ -30,7 +30,7 @@ class TransitApiService {
   Future<List<TransitStop>> fetchStations({
     CancelToken? cancelToken,
     bool forceRefresh = false,
-    int limit = 4000,
+    int batchSize = 4000,
     bool includeStops = true,
   }) async {
     List<Map<String, dynamic>>? cached;
@@ -45,39 +45,53 @@ class TransitApiService {
       }
     }
 
-    final query = <String, dynamic>{
-      'select': 'stop_id,stop_name,stop_desc,stop_loc,parent_station,location_type',
-      'order': 'stop_name',
-      'limit': limit,
-    };
-    if (!includeStops) {
-      query['location_type'] = 'eq.station';
-    }
-
-    final res = await _dio.get(
-      _stopsEndpoint,
-      cancelToken: cancelToken,
-      queryParameters: query,
-    );
-
-    dynamic data = res.data;
-    if (data is String) {
-      data = jsonDecode(data);
-    }
-
     final stops = <TransitStop>[];
     final raw = <Map<String, dynamic>>[];
+    final fetchSize = batchSize.clamp(500, 8000);
+    var offset = 0;
 
-    if (data is List) {
-      for (final item in data) {
-        if (item is! Map) continue;
-        final map = Map<String, dynamic>.from(item as Map);
-        final stop = TransitStop.fromJson(map);
-        if (stop != null) {
-          stops.add(stop);
-          raw.add(map);
+    while (true) {
+      final query = <String, dynamic>{
+        'select':
+            'stop_id,stop_name,stop_desc,stop_loc,parent_station,location_type',
+        'order': 'stop_name',
+        'limit': fetchSize,
+        'offset': offset,
+      };
+      if (!includeStops) {
+        query['or'] = '(location_type.eq.station,location_type.is.null)';
+      }
+
+      final res = await _dio.get(
+        _stopsEndpoint,
+        cancelToken: cancelToken,
+        queryParameters: query,
+      );
+
+      dynamic data = res.data;
+      if (data is String) {
+        data = jsonDecode(data);
+      }
+
+      final beforeCount = raw.length;
+
+      if (data is List) {
+        for (final item in data) {
+          if (item is! Map) continue;
+          final map = Map<String, dynamic>.from(item as Map);
+          final stop = TransitStop.fromJson(map);
+          if (stop != null) {
+            stops.add(stop);
+            raw.add(map);
+          }
         }
       }
+
+      final fetched = raw.length - beforeCount;
+      if (fetched < fetchSize) {
+        break;
+      }
+      offset += fetchSize;
     }
 
     if (raw.isNotEmpty) {

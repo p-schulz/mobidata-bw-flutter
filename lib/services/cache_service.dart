@@ -41,7 +41,7 @@ class CacheService {
 
   List<Map<String, dynamic>>? loadJsonList(
     String key, {
-    Duration maxAge = const Duration(minutes: 10),
+    Duration maxAge = const Duration(minutes: 3600),
   }) {
     final rec = _box.get(key);
     if (rec is! Map) return null;

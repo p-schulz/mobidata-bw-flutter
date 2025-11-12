@@ -5,6 +5,8 @@ class TransitStop {
   final double lon;
   final String? description;
   final String? parentStationId;
+  final int? locationType;
+  final int? wheelchairBoarding;
 
   TransitStop({
     required this.id,
@@ -13,6 +15,8 @@ class TransitStop {
     required this.lon,
     this.description,
     this.parentStationId,
+    this.locationType,
+    this.wheelchairBoarding,
   });
 
   static TransitStop? fromJson(Map<String, dynamic> json) {
@@ -48,6 +52,31 @@ class TransitStop {
       lon: lon,
       description: json['stop_desc']?.toString(),
       parentStationId: json['parent_station']?.toString(),
+      locationType: json['location_type'] is int
+          ? json['location_type'] as int
+          : int.tryParse(json['location_type']?.toString() ?? ''),
+      wheelchairBoarding: json['wheelchair_boarding'] is int
+          ? json['wheelchair_boarding'] as int
+          : int.tryParse(json['wheelchair_boarding']?.toString() ?? ''),
+    );
+  }
+
+  static TransitStop? fromDbRow(Map<String, Object?> row) {
+    final lat = row['stop_lat'];
+    final lon = row['stop_lon'];
+    if (lat == null || lon == null) return null;
+    final id = row['stop_id']?.toString();
+    final name = row['stop_name']?.toString();
+    if (id == null || id.isEmpty || name == null || name.isEmpty) return null;
+    return TransitStop(
+      id: id,
+      name: name,
+      lat: (lat as num).toDouble(),
+      lon: (lon as num).toDouble(),
+      description: row['stop_desc']?.toString(),
+      parentStationId: row['parent_station']?.toString(),
+      locationType: row['location_type'] as int?,
+      wheelchairBoarding: row['wheelchair_boarding'] as int?,
     );
   }
 
