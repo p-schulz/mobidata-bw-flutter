@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:archive/archive.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_map/flutter_map.dart' show LatLngBounds;
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -28,6 +29,8 @@ class GtfsDatabaseService {
   Database? _db;
   bool _initializing = false;
   final ValueNotifier<double?> downloadProgress = ValueNotifier<double?>(null);
+  String? _dbPath;
+  String? get databasePath => _dbPath;
 
   Future<Database> get database async {
     if (_db == null) {
@@ -36,23 +39,38 @@ class GtfsDatabaseService {
     return _db!;
   }
 
-  Future<void> init() async {
+  Future<void> init({
+    bool useBundledSeed = true,
+    bool allowDownload = true,
+  }) async {
     if (_db != null || _initializing) return;
     _initializing = true;
     try {
       final dir = await getApplicationDocumentsDirectory();
       final dbPath = p.join(dir.path, _dbName);
-      _db = await openDatabase(
-        dbPath,
-        version: 1,
-        onConfigure: (db) async {
-          await db.execute('PRAGMA foreign_keys = ON');
-        },
-        onCreate: (db, version) async {
-          await _createSchema(db);
-        },
-      );
-      await _ensureData();
+      _dbPath = dbPath;
+      final dbFile = File(dbPath);
+
+      if (!await dbFile.exists()) {
+        var copied = false;
+        if (useBundledSeed) {
+          copied = await _tryCopyBundledSeed(dbPath);
+        }
+        if (!copied) {
+          if (!allowDownload) {
+            throw Exception(
+                'Keine GTFS-Seed-Datei gefunden und Download deaktiviert.');
+          }
+          _db = await _openDatabase(dbPath, resetSchema: true);
+          await _importGtfsData();
+          return;
+        }
+      }
+
+      _db = await _openDatabase(dbPath);
+      if (allowDownload) {
+        await _ensureData();
+      }
     } finally {
       _initializing = false;
     }
@@ -828,6 +846,39 @@ class GtfsDatabaseService {
       'metadata',
       {'key': key, 'value': value},
       conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<bool> _tryCopyBundledSeed(String dbPath) async {
+    try {
+      final data = await rootBundle.load('assets/gtfs/gtfs_seed.sqlite');
+      final bytes =
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final file = File(dbPath);
+      await file.parent.create(recursive: true);
+      await file.writeAsBytes(bytes, flush: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<Database> _openDatabase(
+    String path, {
+    bool resetSchema = false,
+  }) async {
+    if (resetSchema && await File(path).exists()) {
+      await File(path).delete();
+    }
+    return openDatabase(
+      path,
+      version: 1,
+      onConfigure: (db) async {
+        await db.execute('PRAGMA foreign_keys = ON');
+      },
+      onCreate: (db, version) async {
+        await _createSchema(db);
+      },
     );
   }
 }

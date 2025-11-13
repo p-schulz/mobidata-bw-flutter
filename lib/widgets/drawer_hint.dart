@@ -27,7 +27,7 @@ class DrawerHint extends StatelessWidget {
             Expanded(
               child: Text(
                 'Wähle hier die Datensatzkategorie.\n'
-                'Aktuell ist nur „Parkplätze“ aktiv.',
+                'Aktuell ist „Parkplätze“ aktiv.',
                 style: theme.textTheme.bodySmall,
               ),
             ),

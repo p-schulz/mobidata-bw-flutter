@@ -11,7 +11,7 @@ class CacheService {
     if (_initialized) return;
 
     if (kIsWeb) {
-      // fix um web-variante testen zu können
+      // fix for testing non-mobile
       await Hive.initFlutter();
     } else {
       // mobile/desktop
@@ -67,7 +67,6 @@ class CacheService {
   static const String keyTransitStationsWithStops =
       'transit_stations_with_stops';
 
-  // parkplätze
   Future<void> saveParkingSites(List<Map<String, dynamic>> list) =>
       saveJsonList(keyParkingSites, list);
 
@@ -99,6 +98,4 @@ class CacheService {
     Duration maxAge = const Duration(hours: 1),
   }) =>
       loadJsonList(keyTransitStationsWithStops, maxAge: maxAge);
-
-  // weitere caches bei Bedarf ergänzen
 }

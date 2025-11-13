@@ -46,13 +46,6 @@ class CarsharingInfo extends StatelessWidget {
                           'Status: ${offer.isRentingAllowed}',
                           style: theme.textTheme.bodySmall,
                         ),
-                      if (offer.lat != null && offer.lon != null)
-                        Text(
-                          '${offer.lat!.toStringAsFixed(4)}, ${offer.lon!.toStringAsFixed(4)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[600],
-                          ),
-                        ),
                     ],
                   ),
                 ],
@@ -62,7 +55,7 @@ class CarsharingInfo extends StatelessWidget {
               onPressed: () {
                 showModalBottomSheet(
                   context: context,
-                  builder: (_) => _ParkingSheet(site: site),
+                  builder: (_) => _CarsharingSheet(offer: offer),
                 );
               },
               child: const Text('Details'),
@@ -99,11 +92,7 @@ class _CarsharingSheet extends StatelessWidget {
               Text('Kapazität: ${offer.availableVehicles}'),
             if (offer.isRentingAllowed != null)
               Text('Status: ${offer.isRentingAllowed}'),
-            if (offer.name != null) Text('Adresse: ${offer.name}'),
-            if (offer.lat != null && offer.lon != null)
-              Text(
-                'Position: ${offer.lat!.toStringAsFixed(5)}, ${offer.lon!.toStringAsFixed(5)}',
-              ),
+            if (offer.name.isNotEmpty) Text('Adresse: ${offer.name}'),
             const SizedBox(height: 12),
             Row(
               children: [

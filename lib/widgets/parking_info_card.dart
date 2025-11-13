@@ -46,13 +46,6 @@ class ParkingInfoCard extends StatelessWidget {
                           'Status: ${site.status}',
                           style: theme.textTheme.bodySmall,
                         ),
-                      if (site.lat != null && site.lon != null)
-                        Text(
-                          '${site.lat!.toStringAsFixed(4)}, ${site.lon!.toStringAsFixed(4)}',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[600],
-                          ),
-                        ),
                     ],
                   ),
                 ],
@@ -99,10 +92,6 @@ class _ParkingSheet extends StatelessWidget {
               Text('Kapazität: ${site.availableSpaces}'),
             if (site.status != null) Text('Status: ${site.status}'),
             if (site.roadName != null) Text('Adresse: ${site.roadName}'),
-            if (site.lat != null && site.lon != null)
-              Text(
-                'Position: ${site.lat!.toStringAsFixed(5)}, ${site.lon!.toStringAsFixed(5)}',
-              ),
             const SizedBox(height: 12),
             Row(
               children: [

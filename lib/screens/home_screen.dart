@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _prefsKeyOpenDrawerOnStart = 'settings_openDrawerOnStart';
   static const _prefsKeyDrawerHintShown = 'drawerHintShown';
 
-  // daten und karte
+  // controllers + services
   final MapController _mapController = MapController();
   final ParkApiService _parkApiService = ParkApiService();
   final SharingApiService _sharingApiService = SharingApiService();
@@ -164,7 +164,6 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
-  // einstellungen laden
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -201,7 +200,6 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
-  // kleinen hinweis beim ersten start anzeigen
   Future<void> _loadDrawerHintPreference() async {
     final prefs = await SharedPreferences.getInstance();
     final shown = prefs.getBool('drawerHintShown') ?? false;
@@ -264,7 +262,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _mapController.move(_center, _zoom);
   }
 
-  // live karten ausschnitt
   LatLngBounds _currentBounds() {
     if (!_mapReady) {
       return LatLngBounds(
@@ -281,9 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
   }
 
-  // debouncing
   void _onMapMovedDebounced() {
-    // alten timer abbrechen wenn noch aktiv
     _debounce?.cancel();
 
     _debounce = Timer(const Duration(milliseconds: 600), () {
@@ -493,11 +488,9 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      // daten abrufen
       final allSites = await _parkApiService.fetchParkingSites();
       final allSpots = await _parkApiService.fetchParkingSpots();
 
-      // kartenbegrenzung
       final b = _currentBounds();
 
       final filteredSites = _filterParkingSitesWithinBounds(allSites, b);
@@ -860,8 +853,6 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('Verfügbare Fahrzeuge: ${offer.availableVehicles}'),
               Text(
                   'Vermietung möglich: ${offer.isRentingAllowed ? 'ja' : 'nein'}'),
-              Text(
-                  'Position: ${offer.lat.toStringAsFixed(5)}, ${offer.lon.toStringAsFixed(5)}'),
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
@@ -894,8 +885,6 @@ class _HomeScreenState extends State<HomeScreen> {
               Text('Verfügbare Räder: ${station.availableVehicles}'),
               Text(
                   'Verleih möglich: ${station.isRentingAllowed ? 'ja' : 'nein'}'),
-              Text(
-                  'Position: ${station.lat.toStringAsFixed(5)}, ${station.lon.toStringAsFixed(5)}'),
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
@@ -931,8 +920,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     'Akku: ${(vehicle.batteryPercent! * 100).round()}% (${vehicle.rangeMeters?.toStringAsFixed(0) ?? '?'} m)'),
               Text('Reserviert: ${vehicle.isReserved ? 'ja' : 'nein'}'),
               Text('Aktiv: ${vehicle.isDisabled ? 'nein' : 'ja'}'),
-              Text(
-                  'Position: ${vehicle.lat.toStringAsFixed(5)}, ${vehicle.lon.toStringAsFixed(5)}'),
               const SizedBox(height: 12),
               Align(
                 alignment: Alignment.centerRight,
@@ -1395,8 +1382,6 @@ class _HomeScreenState extends State<HomeScreen> {
           if (spot.realtimeStatus != null)
             Text('Status: ${spot.realtimeStatus}'),
           if (spot.address != null) Text(spot.address!),
-          Text(
-              '${spot.lat.toStringAsFixed(4)}, ${spot.lon.toStringAsFixed(4)}'),
         ],
         onDetails: () => _showParkingSpotDetails(spot),
         onClose: () {
@@ -1443,8 +1428,6 @@ class _HomeScreenState extends State<HomeScreen> {
           Text('Anbieter: ${offer.provider}'),
           Text('Verfügbar: ${offer.availableVehicles}'),
           Text('Typ: ${offer.vehicleType}'),
-          Text(
-              '${offer.lat.toStringAsFixed(4)}, ${offer.lon.toStringAsFixed(4)}'),
         ],
         onDetails: () => _showCarsharingDetails(offer),
         onClose: () {
@@ -1463,8 +1446,6 @@ class _HomeScreenState extends State<HomeScreen> {
         details: [
           Text('Anbieter: ${station.provider}'),
           Text('Verfügbar: ${station.availableVehicles}'),
-          Text(
-              '${station.lat.toStringAsFixed(4)}, ${station.lon.toStringAsFixed(4)}'),
         ],
         onDetails: () => _showBikesharingDetails(station),
         onClose: () {
@@ -1486,8 +1467,6 @@ class _HomeScreenState extends State<HomeScreen> {
         details: [
           Text('Anbieter: ${scooter.provider}'),
           Text('Akku: $battery'),
-          Text(
-              '${scooter.lat.toStringAsFixed(4)}, ${scooter.lon.toStringAsFixed(4)}'),
         ],
         onDetails: () => _showScooterDetails(scooter),
         onClose: () {
@@ -1619,9 +1598,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  ////////////////////////////////////////
-  /// MAIN SCREEN
-  ////////////////////////////////////////
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1640,7 +1616,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       key: _scaffoldKey,
-
       appBar: AppBar(
         title: Text(appBarTitle),
         actions: [
@@ -1655,10 +1630,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-
       drawer: _buildMainDrawer(context),
-
-      // karte
       body: Stack(
         children: [
           FlutterMap(
@@ -1689,8 +1661,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 }
               },
             ),
-
-            // layer mit markern
             children: [
               TileLayer(
                 urlTemplate: isDark
@@ -1707,16 +1677,12 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ],
           ),
-
-          // attribution widget
           MapAttributionWidget(isDarkMode: isDark),
-
-          // filter
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             top: _showFilterBar
                 ? 8
-                : -100, // kToolbarHeight rausfahren nach oben
+                : -100, // kToolbarHeight nach oben rausfahren
             left: 8,
             right: 8,
             child: AnimatedOpacity(
@@ -1795,7 +1761,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-
           if (_gtfsInitializing)
             IgnorePointer(
               ignoring: true,
@@ -1841,8 +1806,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-
-          // overlay zum laden
           if (_loading)
             const Positioned.fill(
               child: ColoredBox(
@@ -1853,15 +1816,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-
-          // legende
           Positioned(
             left: 8,
             bottom: 8,
             child: _buildLegendForCategory(),
           ),
-
-          // fehlerbox
           if (_error != null)
             Positioned(
               left: 12,
@@ -1875,7 +1834,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
-
           if (infoCard != null)
             Positioned(
               left: 12,
@@ -1887,10 +1845,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  ////////////////////////////////////////
-  /// KARTEN LEGENDE
-  ////////////////////////////////////////
 
   Widget _buildLegendForCategory() {
     final theme = Theme.of(context);
@@ -2020,10 +1974,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  ////////////////////////////////////////
-  /// KATEGORIEN LISTE
-  ////////////////////////////////////////
-
   Widget _buildCategoryTile(DatasetCategory cat, String label) {
     final isSelected = _selectedCategory == cat;
     final highlightColor =
@@ -2068,9 +2018,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  ////////////////////////////////////////
-  /// DRAWER
-  ////////////////////////////////////////
   void _onSelectCategory(DatasetCategory cat) {
     Navigator.of(context).pop();
     setState(() {
@@ -2081,8 +2028,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildMainDrawer(BuildContext context) {
     final theme = Theme.of(context);
-
-    // Kategorien als Anzeige-Namen
     final items = _categoryTitles();
 
     return Drawer(
@@ -2113,8 +2058,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
-            // hinweis
             if (_showDrawerHint)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12.0),
@@ -2124,8 +2067,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
               ),
-
-            // kategorien
             Expanded(
               child: ListView(
                 children: [
@@ -2134,15 +2075,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 ],
               ),
             ),
-
             const Divider(height: 1),
-
-            // einstellungen
             ListTile(
               leading: const Icon(Icons.settings_outlined),
               title: const Text('Einstellungen'),
               onTap: () {
-                Navigator.of(context).pop(); // Drawer schließen
+                Navigator.of(context).pop();
                 showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -2161,8 +2099,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-
-            // impressum + lizenzen
             ListTile(
               leading: const Icon(Icons.info_outline),
               title: const Text('Impressum & Lizenzen'),
