@@ -7,10 +7,12 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../services/gtfs_database_service.dart';
+import '../services/charging_api_service.dart';
+import '../services/construction_api_service.dart';
 import '../services/gtfs_realtime_service.dart';
 import '../services/park_api_service.dart';
 import '../services/sharing_api_service.dart';
+import '../services/transit_api_service.dart';
 
 import '../models/categories.dart';
 import '../models/app_theme_setting.dart';
@@ -23,7 +25,7 @@ import '../models/bikesharing_station.dart';
 import '../models/scooter_vehicle.dart';
 import '../models/charging_station.dart';
 import '../models/construction_site.dart';
-import '../models/bicycle_network.dart';
+//import '../models/bicycle_network.dart';
 
 import '../widgets/settings_sheet.dart';
 import '../widgets/drawer_hint.dart';
@@ -32,6 +34,8 @@ import '../widgets/filter_bar.dart';
 import '../widgets/map_attribution.dart';
 import '../widgets/parking_info_card.dart';
 import '../widgets/transit_departure_board.dart';
+import '../widgets/charging_info_card.dart';
+import '../widgets/construction_zone_card.dart';
 
 class HomeScreen extends StatefulWidget {
   final AppThemeSetting appThemeSetting;
@@ -65,8 +69,11 @@ class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
   final ParkApiService _parkApiService = ParkApiService();
   final SharingApiService _sharingApiService = SharingApiService();
-  final GtfsDatabaseService _gtfsDatabaseService = GtfsDatabaseService.instance;
+  final TransitApiService _transitApiService = TransitApiService();
   final GtfsRealtimeService _gtfsRealtimeService = GtfsRealtimeService.instance;
+  final ChargingApiService _chargingApiService = ChargingApiService();
+  final ConstructionApiService _constructionApiService =
+      ConstructionApiService();
 
   //LatLng _center = const LatLng(48.5216, 9.0576); // Tübingen, center of BW
   LatLng _center = const LatLng(49.0068, 8.40365); // Karlsruhe
@@ -77,8 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _error;
   Timer? _debounce;
   bool _showFilterBar = true;
-  bool _gtfsInitializing = false;
-  double? _gtfsDownloadProgress;
 
   DatasetCategory _selectedCategory = DatasetCategory.parking;
 
@@ -125,11 +130,16 @@ class _HomeScreenState extends State<HomeScreen> {
   static const Set<int> _metroRouteTypes = {1};
   static const Set<int> _suburbanRouteTypes = {109};
   static const Set<int> _railRouteTypes = {2, 100, 101, 102, 103, 104};
-  bool _showTransitStops = false;
 
   // charging
+  List<ChargingStation> _chargingStations = [];
+  ChargingStation? _selectedChargingStation;
 
   // construction
+  List<ConstructionSite> _constructionSites = [];
+  ConstructionSite? _selectedConstructionSite;
+
+  bool _showTransitStops = false;
 
   // bicycle network
 
@@ -138,8 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
 
-    _gtfsDatabaseService.downloadProgress
-        .addListener(_onGtfsDownloadProgressChanged);
+    _gtfsRealtimeService.startPolling();
 
     _ensureLocation();
 
@@ -152,14 +161,11 @@ class _HomeScreenState extends State<HomeScreen> {
       });
     });
     _loadDataForCurrentCategory();
-    _initializeGtfs();
   }
 
   @override
   void dispose() {
     _gtfsRealtimeService.stopPolling();
-    _gtfsDatabaseService.downloadProgress
-        .removeListener(_onGtfsDownloadProgressChanged);
     _debounce?.cancel();
     super.dispose();
   }
@@ -231,32 +237,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _onGtfsDownloadProgressChanged() {
-    setState(() {
-      _gtfsDownloadProgress = _gtfsDatabaseService.downloadProgress.value;
-    });
-  }
-
-  Future<void> _initializeGtfs() async {
-    setState(() {
-      _gtfsInitializing = true;
-      _vehiclePositions = [];
-      _selectedTransitDeparture = null;
-    });
-    try {
-      await _gtfsDatabaseService.init();
-      _gtfsRealtimeService.startPolling();
-    } catch (e) {
-      setState(() {
-        _error = 'GTFS-Import fehlgeschlagen: $e';
-      });
-    } finally {
-      setState(() {
-        _gtfsInitializing = false;
-      });
-    }
-  }
-
   void _moveMapIfReady() {
     if (!_mapReady) return;
     _mapController.move(_center, _zoom);
@@ -294,6 +274,12 @@ class _HomeScreenState extends State<HomeScreen> {
         case DatasetCategory.transit:
           _loadTransit();
           break;
+        case DatasetCategory.charging:
+          _loadCharging(showSpinner: false);
+          break;
+        case DatasetCategory.construction:
+          _loadConstructionSites(showSpinner: false);
+          break;
         default:
           break;
       }
@@ -321,6 +307,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _carsharingOffers = [];
             _bikesharingStations = [];
             _scooterVehicles = [];
+            _chargingStations = [];
             _transitStops = [];
             _selectedCarsharingOffer = null;
             _selectedBikesharingStation = null;
@@ -332,6 +319,9 @@ class _HomeScreenState extends State<HomeScreen> {
             _selectedTransitDeparture = null;
             _vehiclePositions = [];
             _vehiclePositionsError = null;
+            _selectedChargingStation = null;
+            _constructionSites = [];
+            _selectedConstructionSite = null;
           });
           break;
 
@@ -361,6 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _parkingSpots = [];
             _bikesharingStations = [];
             _scooterVehicles = [];
+            _chargingStations = [];
             _transitStops = [];
             _selectedSite = null;
             _selectedSpot = null;
@@ -373,6 +364,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _selectedTransitDeparture = null;
             _vehiclePositions = [];
             _vehiclePositionsError = null;
+            _selectedChargingStation = null;
           });
           break;
         case DatasetCategory.bikesharing:
@@ -406,6 +398,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _parkingSites = [];
             _parkingSpots = [];
             _scooterVehicles = [];
+            _chargingStations = [];
             _transitStops = [];
             _selectedSite = null;
             _selectedSpot = null;
@@ -418,6 +411,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _selectedTransitDeparture = null;
             _vehiclePositions = [];
             _vehiclePositionsError = null;
+            _selectedChargingStation = null;
           });
           break;
         case DatasetCategory.scooters:
@@ -446,6 +440,7 @@ class _HomeScreenState extends State<HomeScreen> {
             _carsharingOffers = [];
             _parkingSites = [];
             _parkingSpots = [];
+            _chargingStations = [];
             _transitStops = [];
             _selectedSite = null;
             _selectedSpot = null;
@@ -458,14 +453,17 @@ class _HomeScreenState extends State<HomeScreen> {
             _selectedTransitDeparture = null;
             _vehiclePositions = [];
             _vehiclePositionsError = null;
+            _selectedChargingStation = null;
           });
           break;
         case DatasetCategory.transit:
           await _loadTransit(forceRefresh: true, showSpinner: true);
           break;
         case DatasetCategory.charging:
+          await _loadCharging();
           break;
         case DatasetCategory.construction:
+          await _loadConstructionSites();
           break;
         case DatasetCategory.bicycleNetwork:
           break;
@@ -516,8 +514,6 @@ class _HomeScreenState extends State<HomeScreen> {
     bool forceRefresh = false,
     bool showSpinner = false,
   }) async {
-    final includeStops = _showTransitStops;
-    final allowedRouteTypes = _buildAllowedTransitRouteTypes();
     if (showSpinner) {
       setState(() {
         _loading = true;
@@ -526,11 +522,17 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      final stops = await _gtfsDatabaseService.fetchStopsInBounds(
+      final stops = await _transitApiService.fetchStops(
         bounds: _currentBounds(),
-        includeStops: includeStops,
-        allowedRouteTypes: allowedRouteTypes,
       );
+      final filteredStops = _showTransitStops
+          ? stops
+          : stops
+              .where((s) =>
+                  s.locationType == 1 ||
+                  s.parentStationId == null ||
+                  s.parentStationId == s.id)
+              .toList();
 
       setState(() {
         if (forceRefresh) {
@@ -551,9 +553,98 @@ class _HomeScreenState extends State<HomeScreen> {
           _vehiclePositions = [];
           _vehiclePositionsError = null;
         }
-        _transitStops = stops;
+        _transitStops = filteredStops;
       });
     } catch (e) {
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (showSpinner) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadCharging({bool showSpinner = true}) async {
+    if (showSpinner) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final bounds = _currentBounds();
+      print(
+          '[Charging] Requesting stations for bbox: (${bounds.west}, ${bounds.south}) – (${bounds.east}, ${bounds.north})');
+      final stations = await _chargingApiService.fetchStations(
+        bounds: bounds,
+      );
+      print('[Charging] Received ${stations.length} stations');
+      final selectedId = _selectedChargingStation?.id;
+      ChargingStation? preservedSelection;
+      if (selectedId != null) {
+        for (final station in stations) {
+          if (station.id == selectedId) {
+            preservedSelection = station;
+            break;
+          }
+        }
+      }
+      setState(() {
+        _chargingStations = stations;
+        _selectedChargingStation = preservedSelection;
+      });
+    } catch (e) {
+      print('[Charging] Error loading stations: $e');
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (showSpinner) {
+        setState(() {
+          _loading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _loadConstructionSites({bool showSpinner = true}) async {
+    if (showSpinner) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      print('[Construction] Fetching roadwork data …');
+      final sites = await _constructionApiService.fetchSites();
+      final bounds = _currentBounds();
+      final filtered = sites
+          .where((s) => _isWithinBounds(s.lat, s.lon, bounds))
+          .toList();
+      final selectedId = _selectedConstructionSite?.id;
+      ConstructionSite? preservedSelection;
+      if (selectedId != null) {
+        for (final site in filtered) {
+          if (site.id == selectedId) {
+            preservedSelection = site;
+            break;
+          }
+        }
+      }
+      print(
+        '[Construction] Total sites: ${sites.length}, '
+        'within bounds: ${filtered.length}',
+      );
+      setState(() {
+        _constructionSites = filtered;
+        _selectedConstructionSite = preservedSelection;
+      });
+    } catch (e) {
+      print('[Construction] Error loading sites: $e');
       setState(() {
         _error = e.toString();
       });
@@ -678,17 +769,16 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final deps = await _gtfsDatabaseService.fetchUpcomingDeparturesForStop(
-        stop.id,
-        horizon: const Duration(hours: 2),
-        limit: 40,
+      final deps = await _transitApiService.fetchDepartures(
+        stopId: stop.id,
+        stopName: stop.name,
+        maxResults: 40,
+        horizonMinutes: 120,
       );
       final merged = deps
-          .map((d) => _buildTransitDepartureFromStatic(
-                d,
-                stationName: stop.name,
-              ))
-          .whereType<TransitDeparture>()
+          .where((d) =>
+              _isTransitRouteTypeEnabled(int.tryParse(d.routeType ?? '')))
+          .map((d) => _mergeRealtimeDeparture(d, stop))
           .toList();
       setState(() {
         _transitDepartures = merged;
@@ -705,45 +795,46 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  TransitDeparture? _buildTransitDepartureFromStatic(
-    StaticGtfsDeparture dep, {
-    required String stationName,
-  }) {
+  TransitDeparture _mergeRealtimeDeparture(
+    TransitDeparture dep,
+    TransitStop stop,
+  ) {
     final scheduled = dep.scheduledDeparture;
-    if (scheduled == null) return null;
-    if (!_isTransitRouteTypeEnabled(dep.routeType)) {
-      return null;
-    }
     final realtimeUpdate = _gtfsRealtimeService.getStopUpdate(
-      dep.tripId,
+      dep.id,
       stopSequence: dep.stopSequence,
-      stopId: dep.stopId,
+      stopId: dep.stopId ?? stop.id,
     );
     DateTime? realtime = scheduled;
-    int? delayMinutes;
+    int? delayMinutes = dep.delayMinutes;
     if (realtimeUpdate != null) {
       if (realtimeUpdate.bestDelay != null) {
-        realtime =
-            scheduled.add(Duration(seconds: realtimeUpdate.bestDelay ?? 0));
+        if (scheduled != null) {
+          realtime =
+              scheduled.add(Duration(seconds: realtimeUpdate.bestDelay ?? 0));
+        }
         delayMinutes = (realtimeUpdate.bestDelay! / 60).round();
       } else if (realtimeUpdate.bestTime != null) {
         realtime = realtimeUpdate.bestTime;
-        delayMinutes = realtime!.difference(scheduled).inMinutes;
+        if (scheduled != null && realtime != null) {
+          delayMinutes = realtime.difference(scheduled).inMinutes;
+        }
       }
     }
     return TransitDeparture(
-      id: dep.tripId,
-      routeShortName: (dep.routeShortName?.isNotEmpty ?? false)
-          ? dep.routeShortName!
-          : dep.routeLongName ?? 'Linie',
+      id: dep.id,
+      routeShortName: dep.routeShortName,
       routeLongName: dep.routeLongName,
-      routeType: dep.routeType?.toString(),
+      routeType: dep.routeType,
       headsign: dep.headsign,
-      stopName: stationName,
-      stationName: stationName,
-      scheduledDeparture: scheduled,
+      stopName: stop.name,
+      stationName: stop.name,
+      stopId: dep.stopId ?? stop.id,
+      stopSequence: dep.stopSequence,
+      scheduledDeparture: dep.scheduledDeparture,
       realtimeDeparture: realtime,
       delayMinutes: delayMinutes,
+      platform: dep.platform,
     );
   }
 
@@ -768,6 +859,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _handleTransitFilterChange() {
     final stop = _selectedTransitStop;
+    _loadTransit();
     if (stop != null) {
       _loadDeparturesForStop(stop);
     } else {
@@ -939,7 +1031,8 @@ class _HomeScreenState extends State<HomeScreen> {
   static const double _minMarkerZoom = 13.0;
 
   List<Marker> _buildMarkersForCategory() {
-    if (_zoom < _minMarkerZoom) {
+    final shouldApplyZoomLimit = _selectedCategory != DatasetCategory.construction;
+    if (shouldApplyZoomLimit && _zoom < _minMarkerZoom) {
       return const [];
     }
     switch (_selectedCategory) {
@@ -954,9 +1047,9 @@ class _HomeScreenState extends State<HomeScreen> {
       case DatasetCategory.transit:
         return _buildTransitMarkers();
       case DatasetCategory.charging:
-        return List<Marker>.empty();
+        return _buildChargingMarkers();
       case DatasetCategory.construction:
-        return List<Marker>.empty();
+        return _buildConstructionMarkers();
       case DatasetCategory.bicycleNetwork:
         return List<Marker>.empty();
     }
@@ -1329,6 +1422,108 @@ class _HomeScreenState extends State<HomeScreen> {
     }).toList();
   }
 
+  List<Marker> _buildConstructionMarkers() {
+    return _constructionSites.map((site) {
+      final isSelected = _selectedConstructionSite?.id == site.id;
+      return Marker(
+        width: 32,
+        height: 32,
+        point: LatLng(site.lat, site.lon),
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedConstructionSite = isSelected ? null : site;
+              _selectedChargingStation = null;
+              _selectedTransitStop = null;
+              _selectedCarsharingOffer = null;
+              _selectedBikesharingStation = null;
+              _selectedScooterVehicle = null;
+              _selectedSite = null;
+              _selectedSpot = null;
+            });
+          },
+          child: Tooltip(
+            message: site.description ?? 'Baustelle',
+            child: AnimatedScale(
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? Colors.deepOrange : Colors.red,
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                      color: Color(0x33000000),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(6),
+                child: const Icon(
+                  Icons.warning,
+                  color: Colors.white,
+                  size: 16,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
+
+  List<Marker> _buildChargingMarkers() {
+    return _chargingStations.map((station) {
+      final isSelected = _selectedChargingStation?.id == station.id;
+      return Marker(
+        width: 34,
+        height: 34,
+        point: LatLng(station.lat, station.lon),
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _selectedChargingStation = isSelected ? null : station;
+              _selectedCarsharingOffer = null;
+              _selectedBikesharingStation = null;
+              _selectedScooterVehicle = null;
+              _selectedSite = null;
+              _selectedSpot = null;
+              _selectedTransitStop = null;
+            });
+          },
+          child: Tooltip(
+            message:
+                '${station.name}${station.status != null ? ' (${station.status})' : ''}',
+            child: AnimatedScale(
+              scale: isSelected ? 1.2 : 1.0,
+              duration: const Duration(milliseconds: 150),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isSelected ? Colors.orange.shade700 : Colors.teal,
+                  boxShadow: const [
+                    BoxShadow(
+                      blurRadius: 4,
+                      offset: Offset(0, 2),
+                      color: Color(0x33000000),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(6),
+                child: const Icon(
+                  Icons.ev_station,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }).toList();
+  }
+
   bool _isTransitRouteTypeEnabled(int? routeType) {
     if (routeType == null) return true;
     if (_busRouteTypes.contains(routeType)) return _filterTransitBus;
@@ -1337,28 +1532,6 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_metroRouteTypes.contains(routeType)) return _filterTransitMetro;
     if (_railRouteTypes.contains(routeType)) return _filterTransitRail;
     return true;
-  }
-
-  Set<int>? _buildAllowedTransitRouteTypes() {
-    final includeBus = _filterTransitBus;
-    final includeTram = _filterTransitTram;
-    final includeSuburban = _filterTransitSuburban;
-    final includeMetro = _filterTransitMetro;
-    final includeRail = _filterTransitRail;
-    if (includeBus &&
-        includeTram &&
-        includeSuburban &&
-        includeMetro &&
-        includeRail) {
-      return null;
-    }
-    final result = <int>{};
-    if (includeBus) result.addAll(_busRouteTypes);
-    if (includeTram) result.addAll(_tramRouteTypes);
-    if (includeSuburban) result.addAll(_suburbanRouteTypes);
-    if (includeMetro) result.addAll(_metroRouteTypes);
-    if (includeRail) result.addAll(_railRouteTypes);
-    return result.isEmpty ? null : result;
   }
 
   Widget? _buildActiveInfoCard() {
@@ -1414,6 +1587,30 @@ class _HomeScreenState extends State<HomeScreen> {
             _selectedTransitDeparture = null;
             _vehiclePositions = [];
             _vehiclePositionsError = null;
+          });
+        },
+      );
+    }
+
+    if (_selectedChargingStation != null) {
+      final station = _selectedChargingStation!;
+      return ChargingInfoCard(
+        station: station,
+        onClose: () {
+          setState(() {
+            _selectedChargingStation = null;
+          });
+        },
+      );
+    }
+
+    if (_selectedConstructionSite != null) {
+      final site = _selectedConstructionSite!;
+      return ConstructionZoneCard(
+        site: site,
+        onClose: () {
+          setState(() {
+            _selectedConstructionSite = null;
           });
         },
       );
@@ -1593,6 +1790,18 @@ class _HomeScreenState extends State<HomeScreen> {
       case DatasetCategory.transit:
         _loadTransit();
         break;
+      case DatasetCategory.charging:
+        final filteredCharging = _chargingStations.where((s) {
+          return _isWithinBounds(s.lat, s.lon, bounds);
+        }).toList();
+        setState(() => _chargingStations = filteredCharging);
+        break;
+      case DatasetCategory.construction:
+        final filteredConstruction = _constructionSites.where((s) {
+          return _isWithinBounds(s.lat, s.lon, bounds);
+        }).toList();
+        setState(() => _constructionSites = filteredConstruction);
+        break;
       default:
         break;
     }
@@ -1601,7 +1810,6 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final downloadProgressValue = _gtfsDownloadProgress;
     final markers =
         _parkingSites.where((s) => s.lat != null && s.lon != null).map((
       s,
@@ -1761,51 +1969,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          if (_gtfsInitializing)
-            IgnorePointer(
-              ignoring: true,
-              child: Positioned.fill(
-                child: Container(
-                  color: Colors.black.withOpacity(0.35),
-                  alignment: Alignment.center,
-                  child: Card(
-                    margin: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          const Text(
-                            'Lade Fahrplandaten…',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          LinearProgressIndicator(
-                            value: downloadProgressValue != null
-                                ? downloadProgressValue
-                                    .clamp(0.0, 1.0)
-                                    .toDouble()
-                                : null,
-                          ),
-                          if (downloadProgressValue != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Text(
-                                '${(downloadProgressValue * 100).clamp(0, 100).toStringAsFixed(0)} %',
-                                style: const TextStyle(fontSize: 12),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
           if (_loading)
             const Positioned.fill(
               child: ColoredBox(
@@ -1968,6 +2131,23 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         );
+      case DatasetCategory.charging:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.ev_station, color: Colors.teal, size: 14),
+              const SizedBox(width: 4),
+              Text('Ladestation',
+                  style: TextStyle(color: textColor, fontSize: 12)),
+            ],
+          ),
+        );
 
       default:
         return Container();
@@ -2007,14 +2187,26 @@ class _HomeScreenState extends State<HomeScreen> {
         break;
     }
 
+    final isDisabled = cat == DatasetCategory.bicycleNetwork;
+
     return ListTile(
-      leading: Icon(icon, color: highlightColor),
+      leading: Icon(
+        icon,
+        color: isDisabled
+            ? Colors.grey
+            : highlightColor ?? Theme.of(context).iconTheme.color,
+      ),
       title: Text(
         label,
-        style: TextStyle(color: highlightColor),
+        style: TextStyle(
+          color: isDisabled
+              ? Colors.grey
+              : highlightColor ?? Theme.of(context).colorScheme.onSurface,
+        ),
       ),
+      enabled: !isDisabled,
       selected: isSelected,
-      onTap: () => _onSelectCategory(cat),
+      onTap: isDisabled ? null : () => _onSelectCategory(cat),
     );
   }
 
@@ -2022,8 +2214,25 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.of(context).pop();
     setState(() {
       _selectedCategory = cat;
+      _clearActiveSelections();
     });
     _loadDataForCurrentCategory();
+  }
+
+  void _clearActiveSelections() {
+    _selectedSite = null;
+    _selectedSpot = null;
+    _selectedCarsharingOffer = null;
+    _selectedBikesharingStation = null;
+    _selectedScooterVehicle = null;
+    _selectedTransitStop = null;
+    _transitDepartures = [];
+    _transitDeparturesError = null;
+    _selectedTransitDeparture = null;
+    _vehiclePositions = [];
+    _vehiclePositionsError = null;
+    _selectedChargingStation = null;
+    _selectedConstructionSite = null;
   }
 
   Widget _buildMainDrawer(BuildContext context) {

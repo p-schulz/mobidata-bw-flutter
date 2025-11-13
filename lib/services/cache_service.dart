@@ -66,6 +66,8 @@ class CacheService {
   static const String keyTransitStationsOnly = 'transit_stations_only';
   static const String keyTransitStationsWithStops =
       'transit_stations_with_stops';
+  static const String keyChargingStationsPrefix = 'charging_stations';
+  static const String keyConstructionSites = 'construction_sites';
 
   Future<void> saveParkingSites(List<Map<String, dynamic>> list) =>
       saveJsonList(keyParkingSites, list);
@@ -98,4 +100,24 @@ class CacheService {
     Duration maxAge = const Duration(hours: 1),
   }) =>
       loadJsonList(keyTransitStationsWithStops, maxAge: maxAge);
+
+  Future<void> saveChargingStations(
+    String cacheKey,
+    List<Map<String, dynamic>> list,
+  ) =>
+      saveJsonList('$keyChargingStationsPrefix:$cacheKey', list);
+
+  List<Map<String, dynamic>>? loadChargingStations(
+    String cacheKey, {
+    Duration maxAge = const Duration(minutes: 15),
+  }) =>
+      loadJsonList('$keyChargingStationsPrefix:$cacheKey', maxAge: maxAge);
+
+  Future<void> saveConstructionSites(List<Map<String, dynamic>> list) =>
+      saveJsonList(keyConstructionSites, list);
+
+  List<Map<String, dynamic>>? loadConstructionSites({
+    Duration maxAge = const Duration(hours: 6),
+  }) =>
+      loadJsonList(keyConstructionSites, maxAge: maxAge);
 }

@@ -7,6 +7,8 @@ class TransitDeparture {
   final String? stopName;
   final String? stationName;
   final String? platform;
+  final String? stopId;
+  final int? stopSequence;
   final DateTime? scheduledDeparture;
   final DateTime? realtimeDeparture;
   final int? delayMinutes;
@@ -20,6 +22,8 @@ class TransitDeparture {
     this.stopName,
     this.stationName,
     this.platform,
+    this.stopId,
+    this.stopSequence,
     this.scheduledDeparture,
     this.realtimeDeparture,
     this.delayMinutes,
@@ -33,8 +37,10 @@ class TransitDeparture {
     if (id == null || id.isEmpty || routeShortName.isEmpty) return null;
 
     final dateStr = json['date']?.toString();
-    final scheduled = _mergeDateAndTime(dateStr, json['departure_time']?.toString());
-    final realtime = _parseDateTime(json['t_departure']?.toString()) ?? scheduled;
+    final scheduled =
+        _mergeDateAndTime(dateStr, json['departure_time']?.toString());
+    final realtime =
+        _parseDateTime(json['t_departure']?.toString()) ?? scheduled;
 
     int? delayMinutes;
     if (scheduled != null && realtime != null) {
@@ -63,6 +69,8 @@ class TransitDeparture {
       stopName: stopName,
       stationName: stationName,
       platform: platform,
+      stopId: json['stop_id']?.toString(),
+      stopSequence: int.tryParse(json['stop_sequence']?.toString() ?? ''),
       scheduledDeparture: scheduled,
       realtimeDeparture: realtime,
       delayMinutes: delayMinutes,

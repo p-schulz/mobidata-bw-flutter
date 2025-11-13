@@ -143,10 +143,6 @@ class FilterBar extends StatelessWidget {
       ]);
     }
 
-    if (chips.isEmpty) {
-      chips.add(const SizedBox.shrink());
-    }
-
     return Card(
       elevation: 4,
       margin: EdgeInsets.zero,

@@ -38,6 +38,8 @@ class TransitStop {
         lat = double.tryParse(match.group(2)!);
       }
     }
+    lat ??= _toDouble(json['stop_lat']);
+    lon ??= _toDouble(json['stop_lon']);
 
     if (lat == null || lon == null) return null;
 
