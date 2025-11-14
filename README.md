@@ -3,6 +3,9 @@ Flutter-App für den mobilen Zugriff auf digitale Mobilitätsdaten von MobiData 
 
 Diese App entstand während des Codevember Hackathons 2025: https://codevember.org/
 
+# Demo im Browser ausprobieren
+Die App kann auch unter http://85.215.128.121/ einfach im Web-Browser ausprobiert werden, ohne die App installieren oder selbst bauen zu müssen.
+
 ## Datenquellen und Lizenzen
 Datenpaket: MobiData BW; NVBW – Nahverkehrsgesellschaft Baden-Württemberg mbH
 Lizenz: Datenlizenz Deutschland – Namensnennung – Version 2.0 (DL-DE-BY 2.0)
