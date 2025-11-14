@@ -76,7 +76,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ConstructionApiService();
 
   //LatLng _center = const LatLng(48.5216, 9.0576); // Tübingen, center of BW
-  LatLng _center = const LatLng(49.0068, 8.40365); // Karlsruhe
+  //LatLng _center = const LatLng(49.0068, 8.40365); // Karlsruhe
+  LatLng _center =
+      const LatLng(48.8020, 9.2170); // Stuttgart, for testing categories
   double _zoom = 13.0;
   bool _mapReady = false;
 
@@ -622,9 +624,8 @@ class _HomeScreenState extends State<HomeScreen> {
       print('[Construction] Fetching roadwork data …');
       final sites = await _constructionApiService.fetchSites();
       final bounds = _currentBounds();
-      final filtered = sites
-          .where((s) => _isWithinBounds(s.lat, s.lon, bounds))
-          .toList();
+      final filtered =
+          sites.where((s) => _isWithinBounds(s.lat, s.lon, bounds)).toList();
       final selectedId = _selectedConstructionSite?.id;
       ConstructionSite? preservedSelection;
       if (selectedId != null) {
@@ -1031,7 +1032,8 @@ class _HomeScreenState extends State<HomeScreen> {
   static const double _minMarkerZoom = 13.0;
 
   List<Marker> _buildMarkersForCategory() {
-    final shouldApplyZoomLimit = _selectedCategory != DatasetCategory.construction;
+    final shouldApplyZoomLimit =
+        _selectedCategory != DatasetCategory.construction;
     if (shouldApplyZoomLimit && _zoom < _minMarkerZoom) {
       return const [];
     }
