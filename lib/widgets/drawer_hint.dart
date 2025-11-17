@@ -8,9 +8,15 @@ class DrawerHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final bool isDark = colorScheme.brightness == Brightness.dark;
+    final Color backgroundColor =
+        isDark ? colorScheme.surfaceVariant.withOpacity(0.7) : colorScheme.secondaryContainer;
+    final Color foregroundColor =
+        isDark ? colorScheme.onSurfaceVariant : colorScheme.onSecondaryContainer;
 
     return Card(
-      color: Colors.amber.shade50,
+      color: backgroundColor,
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       child: Padding(
@@ -20,7 +26,7 @@ class DrawerHint extends StatelessWidget {
           children: [
             Icon(
               Icons.swipe_right_alt,
-              color: theme.colorScheme.primary,
+              color: colorScheme.primary,
               size: 20,
             ),
             const SizedBox(width: 8),
@@ -28,13 +34,19 @@ class DrawerHint extends StatelessWidget {
               child: Text(
                 'Wähle hier die Datensatzkategorie.\n'
                 'Aktuell ist „Parkplätze“ aktiv.',
-                style: theme.textTheme.bodySmall,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: foregroundColor,
+                ),
               ),
             ),
             IconButton(
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(),
-              icon: const Icon(Icons.close, size: 18),
+              icon: Icon(
+                Icons.close,
+                size: 18,
+                color: foregroundColor,
+              ),
               onPressed: onClose,
               tooltip: 'Hinweis ausblenden',
             ),

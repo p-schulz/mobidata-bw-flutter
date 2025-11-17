@@ -142,6 +142,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ConstructionSite? _selectedConstructionSite;
 
   bool _showTransitStops = false;
+  final Set<String> _expandedClusterKeys = <String>{};
 
   // bicycle network
 
@@ -264,6 +265,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _debounce?.cancel();
 
     _debounce = Timer(const Duration(milliseconds: 600), () {
+      if (_expandedClusterKeys.isNotEmpty) {
+        setState(() {
+          _expandedClusterKeys.clear();
+        });
+      }
       switch (_selectedCategory) {
         case DatasetCategory.parking:
           _loadParking();
@@ -1029,9 +1035,10 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  static const double _minMarkerZoom = 13.0;
+  static const double _minMarkerZoom = 15.0;
 
   List<Marker> _buildMarkersForCategory() {
+    // Apply the global zoom threshold unless the category explicitly ignores it (construction stays visible at all zoom levels).
     final shouldApplyZoomLimit =
         _selectedCategory != DatasetCategory.construction;
     if (shouldApplyZoomLimit && _zoom < _minMarkerZoom) {
@@ -1058,109 +1065,172 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Marker> _buildParkingMarkers() {
-    final siteMarkers = _parkingSites
-        .map((s) {
-          final lat = s.lat, lon = s.lon;
-          if (lat == null || lon == null) return null;
+    final clusters = _clusterItems<ParkingSite>(
+      items:
+          _parkingSites.where((s) => s.lat != null && s.lon != null).toList(),
+      namespace: 'parking_site',
+      getId: (s) => s.id ?? '${s.lat}_${s.lon}',
+      getLat: (s) => s.lat!,
+      getLon: (s) => s.lon!,
+    );
+    final markers = <Marker>[];
+    final activeClusterKeys = <String>{};
 
-          final isSelected = _selectedSite?.id == s.id;
-          final color = _statusColor(s);
+    for (final cluster in clusters) {
+      if (cluster.items.length > 1) {
+        activeClusterKeys.add(cluster.key);
+        if (_expandedClusterKeys.contains(cluster.key)) {
+          for (final site in cluster.items) {
+            markers.add(_buildParkingSiteMarker(site));
+          }
+        } else {
+          markers.add(_buildClusterMarker(
+            center: cluster.center,
+            count: cluster.items.length,
+            color: Colors.blueGrey.shade700,
+            onTap: () {
+              setState(() {
+                _expandedClusterKeys.add(cluster.key);
+              });
+            },
+          ));
+        }
+      } else if (cluster.items.isNotEmpty) {
+        markers.add(_buildParkingSiteMarker(cluster.items.first));
+      }
+    }
 
-          return Marker(
-            width: 36,
-            height: 36,
-            point: LatLng(lat, lon),
-            child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  final alreadySelected = _selectedSite?.id == s.id;
-                  _selectedSite = alreadySelected ? null : s;
-                  _selectedSpot = null;
-                  _selectedCarsharingOffer = null;
-                  _selectedBikesharingStation = null;
-                  _selectedScooterVehicle = null;
-                });
-              },
-              child: AnimatedScale(
-                scale: isSelected ? 1.2 : 1.0,
-                duration: const Duration(milliseconds: 150),
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isSelected ? Colors.orange.shade700 : color,
-                    boxShadow: const [
-                      BoxShadow(
-                        blurRadius: 4,
-                        offset: Offset(0, 2),
-                        color: Color(0x55000000),
-                      ),
-                    ],
-                  ),
-                  padding: const EdgeInsets.all(4),
-                  child: const Icon(
-                    Icons.local_parking,
-                    size: 18,
-                    color: Colors.white,
-                  ),
+    final spotClusters = _clusterItems<ParkingSpot>(
+      items: _parkingSpots,
+      namespace: 'parking_spot',
+      getId: (s) => s.id ?? '${s.lat}_${s.lon}',
+      getLat: (s) => s.lat,
+      getLon: (s) => s.lon,
+    );
+
+    final spotActiveKeys = <String>{};
+    for (final cluster in spotClusters) {
+      if (cluster.items.length > 1) {
+        spotActiveKeys.add(cluster.key);
+        if (_expandedClusterKeys.contains(cluster.key)) {
+          for (final spot in cluster.items) {
+            markers.add(_buildParkingSpotMarker(spot));
+          }
+        } else {
+          markers.add(_buildClusterMarker(
+            center: cluster.center,
+            count: cluster.items.length,
+            color: Colors.orange.shade600,
+            onTap: () {
+              setState(() {
+                _expandedClusterKeys.add(cluster.key);
+              });
+            },
+          ));
+        }
+      } else if (cluster.items.isNotEmpty) {
+        markers.add(_buildParkingSpotMarker(cluster.items.first));
+      }
+    }
+
+    _pruneClusterKeys('parking_site', activeClusterKeys);
+    _pruneClusterKeys('parking_spot', spotActiveKeys);
+    return markers;
+  }
+
+  Marker _buildParkingSiteMarker(ParkingSite s) {
+    final isSelected = _selectedSite?.id == s.id;
+    final color = _statusColor(s);
+    return Marker(
+      width: 36,
+      height: 36,
+      point: LatLng(s.lat!, s.lon!),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            final alreadySelected = _selectedSite?.id == s.id;
+            _selectedSite = alreadySelected ? null : s;
+            _selectedSpot = null;
+            _selectedCarsharingOffer = null;
+            _selectedBikesharingStation = null;
+            _selectedScooterVehicle = null;
+          });
+        },
+        child: AnimatedScale(
+          scale: isSelected ? 1.2 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isSelected ? Colors.orange.shade700 : color,
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                  color: Color(0x55000000),
                 ),
-              ),
+              ],
             ),
-          );
-        })
-        .whereType<Marker>()
-        .toList();
+            padding: const EdgeInsets.all(4),
+            child: const Icon(
+              Icons.local_parking,
+              size: 18,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
-    final spotMarkers = _parkingSpots.map((spot) {
-      final isSelected = _selectedSpot?.id == spot.id;
-      final color = _parkingSpotColor(spot);
-      return Marker(
-        width: 32,
-        height: 32,
-        point: LatLng(spot.lat, spot.lon),
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              final alreadySelected = _selectedSpot?.id == spot.id;
-              _selectedSpot = alreadySelected ? null : spot;
-              _selectedSite = null;
-              _selectedCarsharingOffer = null;
-              _selectedBikesharingStation = null;
-              _selectedScooterVehicle = null;
-            });
-          },
-          child: Tooltip(
-            message: spot.realtimeStatus != null
-                ? '${spot.name} (${spot.realtimeStatus})'
-                : spot.name,
-            child: AnimatedScale(
-              scale: isSelected ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isSelected ? Colors.orange.shade700 : color,
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                      color: Color(0x33000000),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(5),
-                child: const Icon(
-                  Icons.push_pin,
-                  size: 16,
-                  color: Colors.white,
-                ),
+  Marker _buildParkingSpotMarker(ParkingSpot spot) {
+    final isSelected = _selectedSpot?.id == spot.id;
+    final color = _parkingSpotColor(spot);
+    return Marker(
+      width: 32,
+      height: 32,
+      point: LatLng(spot.lat, spot.lon),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            final alreadySelected = _selectedSpot?.id == spot.id;
+            _selectedSpot = alreadySelected ? null : spot;
+            _selectedSite = null;
+            _selectedCarsharingOffer = null;
+            _selectedBikesharingStation = null;
+            _selectedScooterVehicle = null;
+          });
+        },
+        child: Tooltip(
+          message: spot.realtimeStatus != null
+              ? '${spot.name} (${spot.realtimeStatus})'
+              : spot.name,
+          child: AnimatedScale(
+            scale: isSelected ? 1.2 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? Colors.orange.shade700 : color,
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                    color: Color(0x33000000),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(5),
+              child: const Icon(
+                Icons.push_pin,
+                size: 16,
+                color: Colors.white,
               ),
             ),
           ),
         ),
-      );
-    }).toList();
-
-    return [...siteMarkers, ...spotMarkers];
+      ),
+    );
   }
 
   List<Marker> _buildTransitMarkers() {
@@ -1425,105 +1495,180 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Marker> _buildConstructionMarkers() {
-    return _constructionSites.map((site) {
-      final isSelected = _selectedConstructionSite?.id == site.id;
-      return Marker(
-        width: 32,
-        height: 32,
-        point: LatLng(site.lat, site.lon),
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedConstructionSite = isSelected ? null : site;
-              _selectedChargingStation = null;
-              _selectedTransitStop = null;
-              _selectedCarsharingOffer = null;
-              _selectedBikesharingStation = null;
-              _selectedScooterVehicle = null;
-              _selectedSite = null;
-              _selectedSpot = null;
-            });
-          },
-          child: Tooltip(
-            message: site.description ?? 'Baustelle',
-            child: AnimatedScale(
-              scale: isSelected ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isSelected ? Colors.deepOrange : Colors.red,
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                      color: Color(0x33000000),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(6),
-                child: const Icon(
-                  Icons.warning,
-                  color: Colors.white,
-                  size: 16,
-                ),
+    final clusters = _clusterItems<ConstructionSite>(
+      items: _constructionSites,
+      namespace: 'construction',
+      getId: (s) => s.id,
+      getLat: (s) => s.lat,
+      getLon: (s) => s.lon,
+    );
+    final markers = <Marker>[];
+    final activeClusterKeys = <String>{};
+
+    for (final cluster in clusters) {
+      if (cluster.items.length > 1) {
+        activeClusterKeys.add(cluster.key);
+        if (_expandedClusterKeys.contains(cluster.key)) {
+          for (final site in cluster.items) {
+            markers.add(_buildConstructionMarker(site));
+          }
+        } else {
+          markers.add(_buildClusterMarker(
+            center: cluster.center,
+            count: cluster.items.length,
+            color: Colors.red.shade700,
+            onTap: () {
+              setState(() {
+                _expandedClusterKeys.add(cluster.key);
+              });
+            },
+          ));
+        }
+      } else if (cluster.items.isNotEmpty) {
+        markers.add(_buildConstructionMarker(cluster.items.first));
+      }
+    }
+
+    _pruneClusterKeys('construction', activeClusterKeys);
+    return markers;
+  }
+
+  Marker _buildConstructionMarker(ConstructionSite site) {
+    final isSelected = _selectedConstructionSite?.id == site.id;
+    return Marker(
+      width: 32,
+      height: 32,
+      point: LatLng(site.lat, site.lon),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedConstructionSite = isSelected ? null : site;
+            _selectedChargingStation = null;
+            _selectedTransitStop = null;
+            _selectedCarsharingOffer = null;
+            _selectedBikesharingStation = null;
+            _selectedScooterVehicle = null;
+            _selectedSite = null;
+            _selectedSpot = null;
+          });
+        },
+        child: Tooltip(
+          message: site.description ?? 'Baustelle',
+          child: AnimatedScale(
+            scale: isSelected ? 1.2 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? Colors.deepOrange : Colors.red,
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                    color: Color(0x33000000),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(6),
+              child: const Icon(
+                Icons.warning,
+                color: Colors.white,
+                size: 16,
               ),
             ),
           ),
         ),
-      );
-    }).toList();
+      ),
+    );
   }
 
   List<Marker> _buildChargingMarkers() {
-    return _chargingStations.map((station) {
-      final isSelected = _selectedChargingStation?.id == station.id;
-      return Marker(
-        width: 34,
-        height: 34,
-        point: LatLng(station.lat, station.lon),
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedChargingStation = isSelected ? null : station;
-              _selectedCarsharingOffer = null;
-              _selectedBikesharingStation = null;
-              _selectedScooterVehicle = null;
-              _selectedSite = null;
-              _selectedSpot = null;
-              _selectedTransitStop = null;
-            });
-          },
-          child: Tooltip(
-            message:
-                '${station.name}${station.status != null ? ' (${station.status})' : ''}',
-            child: AnimatedScale(
-              scale: isSelected ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isSelected ? Colors.orange.shade700 : Colors.teal,
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                      color: Color(0x33000000),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(6),
-                child: const Icon(
-                  Icons.ev_station,
-                  color: Colors.white,
-                  size: 18,
-                ),
+    final clusters = _clusterItems<ChargingStation>(
+      items: _chargingStations,
+      namespace: 'charging',
+      getId: (s) => s.id,
+      getLat: (s) => s.lat,
+      getLon: (s) => s.lon,
+    );
+    final markers = <Marker>[];
+    final activeClusterKeys = <String>{};
+
+    for (final cluster in clusters) {
+      if (cluster.items.length > 1) {
+        activeClusterKeys.add(cluster.key);
+        if (_expandedClusterKeys.contains(cluster.key)) {
+          for (final station in cluster.items) {
+            markers.add(_buildChargingMarker(station));
+          }
+        } else {
+          markers.add(_buildClusterMarker(
+            center: cluster.center,
+            count: cluster.items.length,
+            color: Colors.teal.shade600,
+            onTap: () {
+              setState(() {
+                _expandedClusterKeys.add(cluster.key);
+              });
+            },
+          ));
+        }
+      } else if (cluster.items.isNotEmpty) {
+        markers.add(_buildChargingMarker(cluster.items.first));
+      }
+    }
+
+    _pruneClusterKeys('charging', activeClusterKeys);
+    return markers;
+  }
+
+  Marker _buildChargingMarker(ChargingStation station) {
+    final isSelected = _selectedChargingStation?.id == station.id;
+    return Marker(
+      width: 34,
+      height: 34,
+      point: LatLng(station.lat, station.lon),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedChargingStation = isSelected ? null : station;
+            _selectedCarsharingOffer = null;
+            _selectedBikesharingStation = null;
+            _selectedScooterVehicle = null;
+            _selectedSite = null;
+            _selectedSpot = null;
+            _selectedTransitStop = null;
+            _selectedConstructionSite = null;
+          });
+        },
+        child: Tooltip(
+          message:
+              '${station.name}${station.status != null ? ' (${station.status})' : ''}',
+          child: AnimatedScale(
+            scale: isSelected ? 1.2 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? Colors.orange.shade700 : Colors.teal,
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                    color: Color(0x33000000),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(6),
+              child: const Icon(
+                Icons.ev_station,
+                color: Colors.white,
+                size: 18,
               ),
             ),
           ),
         ),
-      );
-    }).toList();
+      ),
+    );
   }
 
   bool _isTransitRouteTypeEnabled(int? routeType) {
@@ -2235,10 +2380,18 @@ class _HomeScreenState extends State<HomeScreen> {
     _vehiclePositionsError = null;
     _selectedChargingStation = null;
     _selectedConstructionSite = null;
+    _expandedClusterKeys.clear();
   }
 
   Widget _buildMainDrawer(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final Color drawerBg =
+        isDark ? const Color(0xff333333) : const Color(0xFFFF66FF);
+    final Color drawerTextColor =
+        isDark ? const Color(0xFFFF66FF) : Colors.white;
+    final Color drawerSubTextColor =
+        drawerTextColor.withOpacity(isDark ? 0.9 : 0.75);
     final items = _categoryTitles();
 
     return Drawer(
@@ -2248,7 +2401,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             DrawerHeader(
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.9),
+                color: drawerBg,
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -2256,14 +2409,14 @@ class _HomeScreenState extends State<HomeScreen> {
                   Text(
                     'MobiData BW in Flutter',
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
+                      color: drawerTextColor,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '(Inoffiziell)',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: Colors.white70,
+                      color: drawerSubTextColor,
                     ),
                   ),
                 ],
@@ -2381,4 +2534,123 @@ class _HomeScreenState extends State<HomeScreen> {
         break;
     }
   }
+
+  double _clusterRadiusMeters() {
+    if (_zoom >= 17) return 40;
+    if (_zoom >= 15) return 90;
+    if (_zoom >= 13) return 180;
+    if (_zoom >= 11) return 320;
+    return 600;
+  }
+
+  List<_Cluster<T>> _clusterItems<T>({
+    required List<T> items,
+    required String namespace,
+    required double Function(T) getLat,
+    required double Function(T) getLon,
+    required String Function(T) getId,
+  }) {
+    final clusters = <_Cluster<T>>[];
+    final distance = Distance();
+    final radius = _clusterRadiusMeters();
+
+    for (final item in items) {
+      final point = LatLng(getLat(item), getLon(item));
+      _Cluster<T>? target;
+      for (final cluster in clusters) {
+        final dist = distance.as(LengthUnit.Meter, cluster.center, point);
+        if (dist <= radius) {
+          target = cluster;
+          break;
+        }
+      }
+
+      if (target != null) {
+        target.items.add(item);
+        target.latSum += point.latitude;
+        target.lonSum += point.longitude;
+        target.center = LatLng(
+          target.latSum / target.items.length,
+          target.lonSum / target.items.length,
+        );
+      } else {
+        clusters.add(
+          _Cluster<T>(
+            items: [item],
+            latSum: point.latitude,
+            lonSum: point.longitude,
+          ),
+        );
+      }
+    }
+
+    for (final cluster in clusters) {
+      final ids = cluster.items.map(getId).where((id) => id.isNotEmpty).toList()
+        ..sort();
+      final rawKey = ids.isNotEmpty
+          ? ids.join('|')
+          : '${cluster.center.latitude}_${cluster.center.longitude}';
+      cluster.key = '$namespace|$rawKey';
+    }
+
+    return clusters;
+  }
+
+  Marker _buildClusterMarker({
+    required LatLng center,
+    required int count,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return Marker(
+      width: 40,
+      height: 40,
+      point: center,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color,
+            boxShadow: const [
+              BoxShadow(
+                blurRadius: 6,
+                offset: Offset(0, 2),
+                color: Color(0x44000000),
+              ),
+            ],
+          ),
+          alignment: Alignment.center,
+          padding: const EdgeInsets.all(8),
+          child: Text(
+            '+$count',
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _pruneClusterKeys(String namespace, Set<String> activeKeys) {
+    final prefix = '$namespace|';
+    _expandedClusterKeys.removeWhere(
+        (key) => key.startsWith(prefix) && !activeKeys.contains(key));
+  }
+}
+
+class _Cluster<T> {
+  _Cluster({
+    required this.items,
+    required this.latSum,
+    required this.lonSum,
+  }) : center = LatLng(latSum, lonSum);
+
+  final List<T> items;
+  double latSum;
+  double lonSum;
+  LatLng center;
+  late String key;
 }
