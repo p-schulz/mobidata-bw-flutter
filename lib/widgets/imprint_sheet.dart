@@ -30,7 +30,7 @@ class ImpressumSheet extends StatelessWidget {
               const SizedBox(height: 4),
               const Text(
                 'Diese App ist ein inoffizielles Projekt des Codevember e.V '
-                'und steht in keinem offiziellen Zusammenhang mit der '
+                'und steht in keinem offiziellen Zusammenhang mit MobiData BW oder der '
                 'NVBW Nahverkehrsgesellschaft Baden-Württemberg mbH.',
               ),
               const SizedBox(height: 16),
@@ -41,8 +41,14 @@ class ImpressumSheet extends StatelessWidget {
               const SizedBox(height: 4),
               const Text(
                 '• MobiData BW – zentrale Daten- und Serviceplattform für Mobilität in Baden-Württemberg.\n'
-                '• Bereitstellung von Parkdaten (u. a. ParkAPI / DATEX II), '
-                'teilweise unter der Datenlizenz Deutschland – Namensnennung 2.0 (DL-DE-BY 2.0).',
+                '• Bereitstellung von Mobilitätsdaten teilweise unter '
+                'der Datenlizenz Deutschland – Namensnennung 2.0 (DL-DE-BY 2.0). \n'
+                '• Weitere Informationen: https://www.mobidata-bw.de/impressum/ \n'
+                '• Verwendung von Open Data des Landesamt für Geoinformation und Landentwicklung Baden-Württemberg (LGL) '
+                'für den Suchdienst von Adressen und Orte.\n '
+                '• Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 \n'
+                '• Weitere Informationen: https://www.lgl-bw.de/ \n'
+                '• App-Entwicklung: Codevember e.V. (https://codevember.org), 2025',
               ),
               const SizedBox(height: 16),
               Text(

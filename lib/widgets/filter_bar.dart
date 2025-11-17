@@ -23,6 +23,14 @@ class FilterBar extends StatelessWidget {
     this.showOnlyBikeStationsWithBikes = false,
     this.onToggleOnlyBikeStationsWithBikes,
 
+    // Charging
+    this.showOnlyFreeChargingStations = false,
+    this.onToggleOnlyFreeCharging,
+
+    // Construction
+    this.showOnlyActiveConstruction = false,
+    this.onToggleOnlyActiveConstruction,
+
     // Transit
     this.showTransitStops = false,
     this.onToggleTransitStops,
@@ -54,6 +62,14 @@ class FilterBar extends StatelessWidget {
   // --- Bikesharing ---
   final bool showOnlyBikeStationsWithBikes;
   final ValueChanged<bool>? onToggleOnlyBikeStationsWithBikes;
+
+  // --- Charging ---
+  final bool showOnlyFreeChargingStations;
+  final ValueChanged<bool>? onToggleOnlyFreeCharging;
+
+  // --- Construction ---
+  final bool showOnlyActiveConstruction;
+  final ValueChanged<bool>? onToggleOnlyActiveConstruction;
 
   // --- Transit ---
   final bool showTransitStops;
@@ -106,10 +122,30 @@ class FilterBar extends StatelessWidget {
       );
     }
 
+    if (category == DatasetCategory.charging) {
+      chips.add(
+        FilterChip(
+          label: const Text('nur freie Ladepunkte'),
+          selected: showOnlyFreeChargingStations,
+          onSelected: onToggleOnlyFreeCharging,
+        ),
+      );
+    }
+
+    if (category == DatasetCategory.construction) {
+      chips.add(
+        FilterChip(
+          label: const Text('nur aktive Baustellen'),
+          selected: showOnlyActiveConstruction,
+          onSelected: onToggleOnlyActiveConstruction,
+        ),
+      );
+    }
+
     if (category == DatasetCategory.transit) {
       chips.add(
         FilterChip(
-          label: const Text('Bahnhof + Haltestelle'),
+          label: const Text('Alle anzeigen'),
           selected: showTransitStops,
           onSelected: onToggleTransitStops,
         ),

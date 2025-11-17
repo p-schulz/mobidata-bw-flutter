@@ -13,6 +13,7 @@ import '../services/gtfs_realtime_service.dart';
 import '../services/park_api_service.dart';
 import '../services/sharing_api_service.dart';
 import '../services/transit_api_service.dart';
+import '../services/geocoding_api_service.dart';
 
 import '../models/categories.dart';
 import '../models/app_theme_setting.dart';
@@ -70,6 +71,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final ParkApiService _parkApiService = ParkApiService();
   final SharingApiService _sharingApiService = SharingApiService();
   final TransitApiService _transitApiService = TransitApiService();
+  final GeocodingApiService _geocodingApiService = GeocodingApiService();
   final GtfsRealtimeService _gtfsRealtimeService = GtfsRealtimeService.instance;
   final ChargingApiService _chargingApiService = ChargingApiService();
   final ConstructionApiService _constructionApiService =
@@ -86,6 +88,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _error;
   Timer? _debounce;
   bool _showFilterBar = true;
+  final TextEditingController _searchController = TextEditingController();
+  bool _searchingLocation = false;
 
   DatasetCategory _selectedCategory = DatasetCategory.parking;
 
@@ -135,10 +139,12 @@ class _HomeScreenState extends State<HomeScreen> {
 
   // charging
   List<ChargingStation> _chargingStations = [];
+  bool _showOnlyFreeChargingStations = false;
   ChargingStation? _selectedChargingStation;
 
   // construction
   List<ConstructionSite> _constructionSites = [];
+  bool _showOnlyActiveConstruction = false;
   ConstructionSite? _selectedConstructionSite;
 
   bool _showTransitStops = false;
@@ -170,6 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _gtfsRealtimeService.stopPolling();
     _debounce?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -235,6 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _zoom = 13.0;
       });
       _moveMapIfReady();
+      _loadDataForCurrentCategory();
     } catch (_) {
       // ignorieren
     }
@@ -243,6 +251,50 @@ class _HomeScreenState extends State<HomeScreen> {
   void _moveMapIfReady() {
     if (!_mapReady) return;
     _mapController.move(_center, _zoom);
+  }
+
+  Future<void> _searchForLocation(String rawQuery) async {
+    final query = rawQuery.trim();
+    if (query.isEmpty || _searchingLocation) return;
+
+    setState(() {
+      _searchingLocation = true;
+    });
+
+    try {
+      final target = await _geocodingApiService.geocode(query);
+      if (target == null) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Kein Ort für „$query“ gefunden.')),
+          );
+        }
+        return;
+      }
+
+      if (!mounted) return;
+      FocusScope.of(context).unfocus();
+
+      setState(() {
+        _center = target;
+        if (_zoom < 14) {
+          _zoom = 14;
+        }
+      });
+      _moveMapIfReady();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Suche fehlgeschlagen: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _searchingLocation = false;
+        });
+      }
+    }
   }
 
   LatLngBounds _currentBounds() {
@@ -605,6 +657,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _chargingStations = stations;
         _selectedChargingStation = preservedSelection;
       });
+      _applyFiltersForCurrentCategory();
     } catch (e) {
       print('[Charging] Error loading stations: $e');
       setState(() {
@@ -632,6 +685,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final bounds = _currentBounds();
       final filtered =
           sites.where((s) => _isWithinBounds(s.lat, s.lon, bounds)).toList();
+      if (_showOnlyActiveConstruction) {
+        filtered.removeWhere((site) => !_isConstructionActive(site));
+      }
       final selectedId = _selectedConstructionSite?.id;
       ConstructionSite? preservedSelection;
       if (selectedId != null) {
@@ -718,6 +774,18 @@ class _HomeScreenState extends State<HomeScreen> {
       lat <= bounds.north &&
       lon >= bounds.west &&
       lon <= bounds.east;
+
+  bool _isConstructionActive(
+    ConstructionSite site, {
+    DateTime? reference,
+  }) {
+    final now = reference ?? DateTime.now();
+    final start = site.startTime;
+    final end = site.endTime;
+    if (start != null && now.isBefore(start)) return false;
+    if (end != null && now.isAfter(end)) return false;
+    return true;
+  }
 
   Color _statusColor(ParkingSite s) {
     switch (s.status) {
@@ -879,6 +947,14 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  void _setAllTransitRouteFilters(bool value) {
+    _filterTransitBus = value;
+    _filterTransitTram = value;
+    _filterTransitSuburban = value;
+    _filterTransitMetro = value;
+    _filterTransitRail = value;
+  }
+
   Future<void> _loadVehiclePositionsForTrip(TransitDeparture dep) async {
     setState(() {
       _loadingVehiclePositions = true;
@@ -1035,7 +1111,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  static const double _minMarkerZoom = 15.0;
+  static const double _minMarkerZoom = 10.0;
 
   List<Marker> _buildMarkersForCategory() {
     // Apply the global zoom threshold unless the category explicitly ignores it (construction stays visible at all zoom levels).
@@ -1234,88 +1310,247 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Marker> _buildTransitMarkers() {
-    return _transitStops.map((stop) {
-      final isSelected = _selectedTransitStop?.id == stop.id;
-      return Marker(
-        width: 34,
-        height: 34,
-        point: LatLng(stop.lat, stop.lon),
-        child: GestureDetector(
-          onTap: () {
-            final alreadySelected = _selectedTransitStop?.id == stop.id;
-            setState(() {
-              _selectedTransitStop = alreadySelected ? null : stop;
-              _selectedSite = null;
-              _selectedSpot = null;
-              _selectedCarsharingOffer = null;
-              _selectedBikesharingStation = null;
-              _selectedScooterVehicle = null;
-              if (alreadySelected) {
-                _transitDepartures = [];
-                _transitDeparturesError = null;
-              } else {
-                _transitDepartures = [];
-                _transitDeparturesError = null;
-              }
-            });
-            if (!alreadySelected) {
-              _loadDeparturesForStop(stop);
+    final clusters = _clusterItems<TransitStop>(
+      items: _transitStops,
+      namespace: 'transit',
+      getId: (s) => s.id,
+      getLat: (s) => s.lat,
+      getLon: (s) => s.lon,
+    );
+    final markers = <Marker>[];
+    final activeKeys = <String>{};
+
+    for (final cluster in clusters) {
+      if (cluster.items.length > 1) {
+        activeKeys.add(cluster.key);
+        if (_expandedClusterKeys.contains(cluster.key)) {
+          for (final stop in cluster.items) {
+            markers.add(_buildTransitMarker(stop));
+          }
+        } else {
+          markers.add(_buildClusterMarker(
+            center: cluster.center,
+            count: cluster.items.length,
+            color: Colors.indigoAccent,
+            onTap: () {
+              setState(() {
+                _expandedClusterKeys.add(cluster.key);
+              });
+            },
+          ));
+        }
+      } else if (cluster.items.isNotEmpty) {
+        markers.add(_buildTransitMarker(cluster.items.first));
+      }
+    }
+
+    _pruneClusterKeys('transit', activeKeys);
+    return markers;
+  }
+
+  Marker _buildTransitMarker(TransitStop stop) {
+    final isSelected = _selectedTransitStop?.id == stop.id;
+    return Marker(
+      width: 34,
+      height: 34,
+      point: LatLng(stop.lat, stop.lon),
+      child: GestureDetector(
+        onTap: () {
+          final alreadySelected = _selectedTransitStop?.id == stop.id;
+          setState(() {
+            _selectedTransitStop = alreadySelected ? null : stop;
+            _selectedSite = null;
+            _selectedSpot = null;
+            _selectedCarsharingOffer = null;
+            _selectedBikesharingStation = null;
+            _selectedScooterVehicle = null;
+            if (alreadySelected) {
+              _transitDepartures = [];
+              _transitDeparturesError = null;
+            } else {
+              _transitDepartures = [];
+              _transitDeparturesError = null;
             }
-          },
-          child: Tooltip(
-            message: stop.name,
-            child: AnimatedScale(
-              scale: isSelected ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color:
-                      isSelected ? Colors.orange.shade700 : Colors.indigoAccent,
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                      color: Color(0x33000000),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(6),
-                child: const Icon(
-                  Icons.train,
-                  color: Colors.white,
-                  size: 18,
-                ),
+          });
+          if (!alreadySelected) {
+            _loadDeparturesForStop(stop);
+          }
+        },
+        child: Tooltip(
+          message: stop.name,
+          child: AnimatedScale(
+            scale: isSelected ? 1.2 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color:
+                    isSelected ? Colors.orange.shade700 : Colors.indigoAccent,
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                    color: Color(0x33000000),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(6),
+              child: const Icon(
+                Icons.train,
+                color: Colors.white,
+                size: 18,
               ),
             ),
           ),
         ),
-      );
-    }).toList();
+      ),
+    );
   }
 
   List<Marker> _buildCarsharingMarkers() {
-    return _carsharingOffers.map((o) {
-      final point = LatLng(o.lat, o.lon);
-      final color = o.availableVehicles > 0
-          ? Colors.green.shade600
-          : Colors.grey.shade600;
-      final isSelected = _selectedCarsharingOffer?.id == o.id;
+    final clusters = _clusterItems<CarsharingOffer>(
+      items: _carsharingOffers,
+      namespace: 'carsharing',
+      getId: (o) => o.id ?? '${o.lat}_${o.lon}',
+      getLat: (o) => o.lat,
+      getLon: (o) => o.lon,
+    );
+    final markers = <Marker>[];
+    final activeKeys = <String>{};
 
-      return Marker(
-        width: 36,
-        height: 36,
-        point: point,
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              final alreadySelected = _selectedCarsharingOffer?.id == o.id;
-              _selectedCarsharingOffer = alreadySelected ? null : o;
-              _selectedBikesharingStation = null;
-              _selectedScooterVehicle = null;
-              _selectedSite = null;
-            });
-          },
+    for (final cluster in clusters) {
+      if (cluster.items.length > 1) {
+        activeKeys.add(cluster.key);
+        if (_expandedClusterKeys.contains(cluster.key)) {
+          for (final offer in cluster.items) {
+            markers.add(_buildCarsharingMarker(offer));
+          }
+        } else {
+          markers.add(_buildClusterMarker(
+            center: cluster.center,
+            count: cluster.items.length,
+            color: Colors.green.shade700,
+            onTap: () {
+              setState(() {
+                _expandedClusterKeys.add(cluster.key);
+              });
+            },
+          ));
+        }
+      } else if (cluster.items.isNotEmpty) {
+        markers.add(_buildCarsharingMarker(cluster.items.first));
+      }
+    }
+
+    _pruneClusterKeys('carsharing', activeKeys);
+    return markers;
+  }
+
+  Marker _buildCarsharingMarker(CarsharingOffer offer) {
+    final color = offer.availableVehicles > 0
+        ? Colors.green.shade600
+        : Colors.grey.shade600;
+    final isSelected = _selectedCarsharingOffer?.id == offer.id;
+    return Marker(
+      width: 36,
+      height: 36,
+      point: LatLng(offer.lat, offer.lon),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            final alreadySelected = _selectedCarsharingOffer?.id == offer.id;
+            _selectedCarsharingOffer = alreadySelected ? null : offer;
+            _selectedBikesharingStation = null;
+            _selectedScooterVehicle = null;
+            _selectedSite = null;
+          });
+        },
+        child: AnimatedScale(
+          scale: isSelected ? 1.2 : 1.0,
+          duration: const Duration(milliseconds: 150),
+          child: Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isSelected ? Colors.orange.shade700 : color,
+              boxShadow: const [
+                BoxShadow(
+                  blurRadius: 4,
+                  offset: Offset(0, 2),
+                  color: Color(0x44000000),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.all(6),
+            child: const Icon(
+              Icons.directions_car,
+              size: 18,
+              color: Colors.white,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Marker> _buildBikesharingMarkers() {
+    final clusters = _clusterItems<BikesharingStation>(
+      items: _bikesharingStations,
+      namespace: 'bikesharing',
+      getId: (s) => s.id ?? '${s.lat}_${s.lon}',
+      getLat: (s) => s.lat,
+      getLon: (s) => s.lon,
+    );
+    final markers = <Marker>[];
+    final activeKeys = <String>{};
+
+    for (final cluster in clusters) {
+      if (cluster.items.length > 1) {
+        activeKeys.add(cluster.key);
+        if (_expandedClusterKeys.contains(cluster.key)) {
+          for (final station in cluster.items) {
+            markers.add(_buildBikesharingMarker(station));
+          }
+        } else {
+          markers.add(_buildClusterMarker(
+            center: cluster.center,
+            count: cluster.items.length,
+            color: Colors.green.shade700,
+            onTap: () {
+              setState(() {
+                _expandedClusterKeys.add(cluster.key);
+              });
+            },
+          ));
+        }
+      } else if (cluster.items.isNotEmpty) {
+        markers.add(_buildBikesharingMarker(cluster.items.first));
+      }
+    }
+
+    _pruneClusterKeys('bikesharing', activeKeys);
+    return markers;
+  }
+
+  Marker _buildBikesharingMarker(BikesharingStation station) {
+    final color =
+        station.availableVehicles > 0 ? Colors.green.shade600 : Colors.red;
+    final isSelected = _selectedBikesharingStation?.id == station.id;
+    return Marker(
+      width: 34,
+      height: 34,
+      point: LatLng(station.lat, station.lon),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedBikesharingStation = isSelected ? null : station;
+            _selectedCarsharingOffer = null;
+            _selectedScooterVehicle = null;
+            _selectedSite = null;
+          });
+        },
+        child: Tooltip(
+          message:
+              '${station.name} (${station.availableVehicles} Bikes verfügbar)',
           child: AnimatedScale(
             scale: isSelected ? 1.2 : 1.0,
             duration: const Duration(milliseconds: 150),
@@ -1327,133 +1562,116 @@ class _HomeScreenState extends State<HomeScreen> {
                   BoxShadow(
                     blurRadius: 4,
                     offset: Offset(0, 2),
-                    color: Color(0x44000000),
+                    color: Color(0x33000000),
                   ),
                 ],
               ),
               padding: const EdgeInsets.all(6),
               child: const Icon(
-                Icons.directions_car,
-                size: 18,
+                Icons.pedal_bike,
                 color: Colors.white,
+                size: 18,
               ),
             ),
           ),
         ),
-      );
-    }).toList();
-  }
-
-  List<Marker> _buildBikesharingMarkers() {
-    return _bikesharingStations.map((station) {
-      final point = LatLng(station.lat, station.lon);
-      final color =
-          station.availableVehicles > 0 ? Colors.green.shade600 : Colors.red;
-      final isSelected = _selectedBikesharingStation?.id == station.id;
-
-      return Marker(
-        width: 34,
-        height: 34,
-        point: point,
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedBikesharingStation = isSelected ? null : station;
-              _selectedCarsharingOffer = null;
-              _selectedScooterVehicle = null;
-              _selectedSite = null;
-            });
-          },
-          child: Tooltip(
-            message:
-                '${station.name} (${station.availableVehicles} Bikes verfügbar)',
-            child: AnimatedScale(
-              scale: isSelected ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isSelected ? Colors.orange.shade700 : color,
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                      color: Color(0x33000000),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(6),
-                child: const Icon(
-                  Icons.pedal_bike,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-    }).toList();
+      ),
+    );
   }
 
   List<Marker> _buildScooterMarkers() {
-    return _scooterVehicles.map((vehicle) {
-      final point = LatLng(vehicle.lat, vehicle.lon);
-      Color color;
-      if (vehicle.isDisabled) {
-        color = Colors.grey;
-      } else if ((vehicle.batteryPercent ?? 1) < 0.2) {
-        color = Colors.orange;
-      } else {
-        color = Colors.lightGreen;
-      }
-      final batteryText = vehicle.batteryPercent != null
-          ? ' - ${(vehicle.batteryPercent! * 100).round()}%'
-          : '';
-      final isSelected = _selectedScooterVehicle?.id == vehicle.id;
+    final clusters = _clusterItems<ScooterVehicle>(
+      items: _scooterVehicles,
+      namespace: 'scooter',
+      getId: (s) => s.id ?? '${s.lat}_${s.lon}',
+      getLat: (s) => s.lat,
+      getLon: (s) => s.lon,
+    );
+    final markers = <Marker>[];
+    final activeKeys = <String>{};
 
-      return Marker(
-        width: 34,
-        height: 34,
-        point: point,
-        child: GestureDetector(
-          onTap: () {
-            setState(() {
-              _selectedScooterVehicle = isSelected ? null : vehicle;
-              _selectedCarsharingOffer = null;
-              _selectedBikesharingStation = null;
-              _selectedSite = null;
-            });
-          },
-          child: Tooltip(
-            message: '${vehicle.vehicleType}$batteryText',
-            child: AnimatedScale(
-              scale: isSelected ? 1.2 : 1.0,
-              duration: const Duration(milliseconds: 150),
-              child: Container(
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: isSelected ? Colors.orange.shade700 : color,
-                  boxShadow: const [
-                    BoxShadow(
-                      blurRadius: 4,
-                      offset: Offset(0, 2),
-                      color: Color(0x33000000),
-                    ),
-                  ],
-                ),
-                padding: const EdgeInsets.all(6),
-                child: const Icon(
-                  Icons.electric_scooter,
-                  color: Colors.white,
-                  size: 18,
-                ),
+    for (final cluster in clusters) {
+      if (cluster.items.length > 1) {
+        activeKeys.add(cluster.key);
+        if (_expandedClusterKeys.contains(cluster.key)) {
+          for (final vehicle in cluster.items) {
+            markers.add(_buildScooterMarker(vehicle));
+          }
+        } else {
+          markers.add(_buildClusterMarker(
+            center: cluster.center,
+            count: cluster.items.length,
+            color: Colors.lightGreen.shade700,
+            onTap: () {
+              setState(() {
+                _expandedClusterKeys.add(cluster.key);
+              });
+            },
+          ));
+        }
+      } else if (cluster.items.isNotEmpty) {
+        markers.add(_buildScooterMarker(cluster.items.first));
+      }
+    }
+
+    _pruneClusterKeys('scooter', activeKeys);
+    return markers;
+  }
+
+  Marker _buildScooterMarker(ScooterVehicle vehicle) {
+    Color color;
+    if (vehicle.isDisabled) {
+      color = Colors.grey;
+    } else if ((vehicle.batteryPercent ?? 1) < 0.2) {
+      color = Colors.orange;
+    } else {
+      color = Colors.lightGreen;
+    }
+    final batteryText = vehicle.batteryPercent != null
+        ? ' - ${(vehicle.batteryPercent! * 100).round()}%'
+        : '';
+    final isSelected = _selectedScooterVehicle?.id == vehicle.id;
+    return Marker(
+      width: 34,
+      height: 34,
+      point: LatLng(vehicle.lat, vehicle.lon),
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _selectedScooterVehicle = isSelected ? null : vehicle;
+            _selectedCarsharingOffer = null;
+            _selectedBikesharingStation = null;
+            _selectedSite = null;
+          });
+        },
+        child: Tooltip(
+          message: '${vehicle.vehicleType}$batteryText',
+          child: AnimatedScale(
+            scale: isSelected ? 1.2 : 1.0,
+            duration: const Duration(milliseconds: 150),
+            child: Container(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? Colors.orange.shade700 : color,
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 4,
+                    offset: Offset(0, 2),
+                    color: Color(0x33000000),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(6),
+              child: const Icon(
+                Icons.electric_scooter,
+                color: Colors.white,
+                size: 18,
               ),
             ),
           ),
         ),
-      );
-    }).toList();
+      ),
+    );
   }
 
   List<Marker> _buildVehiclePositionMarkers() {
@@ -1940,13 +2158,18 @@ class _HomeScreenState extends State<HomeScreen> {
       case DatasetCategory.charging:
         final filteredCharging = _chargingStations.where((s) {
           return _isWithinBounds(s.lat, s.lon, bounds);
+        }).where((s) {
+          if (!_showOnlyFreeChargingStations) return true;
+          final status = (s.status ?? '').toUpperCase();
+          return status == 'AVAILABLE' || status == 'FREE';
         }).toList();
         setState(() => _chargingStations = filteredCharging);
         break;
       case DatasetCategory.construction:
         final filteredConstruction = _constructionSites.where((s) {
           return _isWithinBounds(s.lat, s.lon, bounds);
-        }).toList();
+        }).where((s) => !_showOnlyActiveConstruction || _isConstructionActive(s))
+            .toList();
         setState(() => _constructionSites = filteredConstruction);
         break;
       default:
@@ -1956,7 +2179,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final markers =
         _parkingSites.where((s) => s.lat != null && s.lon != null).map((
       s,
@@ -1968,11 +2192,52 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final categoryTitles = _categoryTitles();
     final appBarTitle = categoryTitles[_selectedCategory] ?? 'MobiData BW';
+    final searchHint = 'Suche nach: $appBarTitle';
 
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
-        title: Text(appBarTitle),
+        titleSpacing: 8,
+        title: SizedBox(
+          height: 42,
+          child: TextField(
+            controller: _searchController,
+            textInputAction: TextInputAction.search,
+            onSubmitted: _searchForLocation,
+            style: theme.textTheme.bodyMedium,
+            decoration: InputDecoration(
+              hintText: searchHint,
+              hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
+              ),
+              prefixIcon: Icon(
+                Icons.search,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              suffixIcon: _searchingLocation
+                  ? Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    )
+                  : null,
+              filled: true,
+              fillColor: theme.colorScheme.surfaceVariant
+                  .withOpacity(isDark ? 0.3 : 1),
+              contentPadding: EdgeInsets.zero,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(24),
+                borderSide: BorderSide.none,
+              ),
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: Icon(_showFilterBar ? Icons.close : Icons.filter_list),
@@ -2072,10 +2337,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       setState(() => _filterOnlyBikeStationsWithBikes = val);
                       _applyFiltersForCurrentCategory();
                     },
+                    showOnlyFreeChargingStations: _showOnlyFreeChargingStations,
+                    onToggleOnlyFreeCharging: (val) {
+                      setState(() => _showOnlyFreeChargingStations = val);
+                      _loadCharging(showSpinner: false);
+                    },
                     showTransitStops: _showTransitStops,
                     onToggleTransitStops: (val) {
                       setState(() {
                         _showTransitStops = val;
+                        _setAllTransitRouteFilters(val);
                         _selectedTransitStop = null;
                         _transitDepartures = [];
                         _transitDeparturesError = null;
@@ -2083,7 +2354,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         _vehiclePositions = [];
                         _vehiclePositionsError = null;
                       });
-                      _loadTransit(forceRefresh: false);
+                      _handleTransitFilterChange();
+                    },
+                    showOnlyActiveConstruction: _showOnlyActiveConstruction,
+                    onToggleOnlyActiveConstruction: (val) {
+                      setState(() => _showOnlyActiveConstruction = val);
+                      _loadConstructionSites(showSpinner: false);
                     },
                     transitShowBus: _filterTransitBus,
                     transitShowTram: _filterTransitTram,
@@ -2529,6 +2805,12 @@ class _HomeScreenState extends State<HomeScreen> {
           _vehiclePositionsError = null;
         });
         _loadTransit(forceRefresh: false);
+        break;
+      case DatasetCategory.construction:
+        setState(() {
+          _showOnlyActiveConstruction = false;
+        });
+        _applyFiltersForCurrentCategory();
         break;
       default:
         break;
