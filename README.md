@@ -81,17 +81,17 @@ Hier laufen die Flutter-Web-Version sowie der zugehörige API-Server.
 
 Die App befindet sich weiterhin in aktiver Entwicklung.
 Aktuell integriert:
-	•	ParkAPI (Belegungsstatus fehlt noch)
-	•	Sharing-Angebot (Bike, Car, Scooter)
-	•	Haltestellen (GTFS SQLite)
-	•	Fahrradverleih
-	•	Ladeinfrastruktur
-	•	Suchfunktion per Geocoding (eigenes SQLite-Gazetteer)
-	•	Live-Abfahrtsmonitor (TRIAS/alternative Echtzeitquellen)
-	•	Verkehrsmeldungen
+- ParkAPI (Belegungsstatus fehlt noch)
+- Sharing-Angebot (Bike, Car, Scooter)
+- Haltestellen (GTFS SQLite)
+- Fahrradverleih
+- Ladeinfrastruktur
+- Suchfunktion per Geocoding (eigenes SQLite-Gazetteer)
+- Live-Abfahrtsmonitor (TRIAS/alternative Echtzeitquellen)
+- Verkehrsmeldungen
 
-Geplant:
-	•	Radnetz
+Geplant: 
+- Radnetz
 
 ### Backend-Projekt:
 Die App benutzt eigene Hilfs-APIs. Der Servercode dazu liegt hier: https://github.com/p-schulz/mobidata-bw-flutter-backend
