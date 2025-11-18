@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 
 import '../models/app_theme_setting.dart';
+import '../models/categories.dart';
 
 class SettingsSheet extends StatefulWidget {
   final bool autoLoadOnMove;
   final bool openDrawerOnStart;
   final ValueChanged<bool> onChangeAutoLoadOnMove;
   final ValueChanged<bool> onChangeOpenDrawerOnStart;
+  final DatasetCategory startCategory;
+  final Map<DatasetCategory, String> categoryTitles;
+  final ValueChanged<DatasetCategory> onChangeStartCategory;
 
   final AppThemeSetting appThemeSetting;
   final ValueChanged<AppThemeSetting> onChangeTheme; // NEU
@@ -16,6 +20,9 @@ class SettingsSheet extends StatefulWidget {
     required this.openDrawerOnStart,
     required this.onChangeAutoLoadOnMove,
     required this.onChangeOpenDrawerOnStart,
+    required this.startCategory,
+    required this.categoryTitles,
+    required this.onChangeStartCategory,
     required this.appThemeSetting,
     required this.onChangeTheme,
   });
@@ -28,6 +35,7 @@ class SettingsSheetState extends State<SettingsSheet> {
   late bool _autoLoadOnMove;
   late bool _openDrawerOnStart;
   late AppThemeSetting _appThemeSetting;
+  late DatasetCategory _startCategory;
 
   @override
   void initState() {
@@ -35,6 +43,7 @@ class SettingsSheetState extends State<SettingsSheet> {
     _autoLoadOnMove = widget.autoLoadOnMove;
     _openDrawerOnStart = widget.openDrawerOnStart;
     _appThemeSetting = widget.appThemeSetting;
+    _startCategory = widget.startCategory;
   }
 
   @override
@@ -124,6 +133,37 @@ class SettingsSheetState extends State<SettingsSheet> {
                   setState(() => _openDrawerOnStart = val);
                   widget.onChangeOpenDrawerOnStart(val);
                 },
+              ),
+
+              const SizedBox(height: 16),
+              Text('Start-Kategorie', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 4),
+              DropdownButtonFormField<DatasetCategory>(
+                value: _startCategory,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                ),
+                items: widget.categoryTitles.entries
+                    .where(
+                      (entry) => entry.key != DatasetCategory.bicycleNetwork,
+                    )
+                    .map(
+                      (entry) => DropdownMenuItem<DatasetCategory>(
+                        value: entry.key,
+                        child: Text(entry.value),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (val) {
+                  if (val == null) return;
+                  setState(() => _startCategory = val);
+                  widget.onChangeStartCategory(val);
+                },
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Diese Kategorie wird nach dem Start automatisch geladen.',
+                style: theme.textTheme.bodySmall,
               ),
 
               const SizedBox(height: 16),

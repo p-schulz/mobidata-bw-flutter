@@ -65,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _prefsKeyAutoLoadOnMove = 'settings_autoLoadOnMove';
   static const _prefsKeyOpenDrawerOnStart = 'settings_openDrawerOnStart';
   static const _prefsKeyDrawerHintShown = 'drawerHintShown';
+  static const _prefsKeyStartCategory = 'settings_startCategory';
 
   // controllers + services
   final MapController _mapController = MapController();
@@ -92,6 +93,8 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _searchingLocation = false;
 
   DatasetCategory _selectedCategory = DatasetCategory.parking;
+  DatasetCategory _preferredStartCategory = DatasetCategory.parking;
+  bool _settingsLoaded = false;
 
   // parkplätze
   List<ParkingSite> _parkingSites = [];
@@ -158,6 +161,7 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
 
     _gtfsRealtimeService.startPolling();
+    _loadPreferences();
 
     _ensureLocation();
 
@@ -169,7 +173,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
     });
-    _loadDataForCurrentCategory();
   }
 
   @override
@@ -181,15 +184,28 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadPreferences() async {
-    final prefs = await SharedPreferences.getInstance();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final storedCategory =
+          _categoryFromStorage(prefs.getString(_prefsKeyStartCategory));
 
-    setState(() {
-      _autoLoadOnMove = prefs.getBool(_prefsKeyAutoLoadOnMove) ?? true;
-      _openDrawerOnStart = prefs.getBool(_prefsKeyOpenDrawerOnStart) ?? true;
+      if (!mounted) return;
+      setState(() {
+        _autoLoadOnMove = prefs.getBool(_prefsKeyAutoLoadOnMove) ?? true;
+        _openDrawerOnStart = prefs.getBool(_prefsKeyOpenDrawerOnStart) ?? true;
+        _preferredStartCategory = storedCategory;
+        _selectedCategory = storedCategory;
+        _settingsLoaded = true;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _settingsLoaded = true;
+      });
+    }
 
-      final hintShown = prefs.getBool(_prefsKeyDrawerHintShown) ?? false;
-      _showDrawerHint = !hintShown;
-    });
+    if (!mounted) return;
+    _loadDataForCurrentCategory();
   }
 
   Future<void> _setAutoLoadOnMove(bool value) async {
@@ -208,6 +224,14 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  Future<void> _setStartCategoryPreference(DatasetCategory category) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefsKeyStartCategory, category.name);
+    setState(() {
+      _preferredStartCategory = category;
+    });
+  }
+
   Future<void> _markDrawerHintAsShown() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefsKeyDrawerHintShown, true);
@@ -218,7 +242,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadDrawerHintPreference() async {
     final prefs = await SharedPreferences.getInstance();
-    final shown = prefs.getBool('drawerHintShown') ?? false;
+    final shown = prefs.getBool(_prefsKeyDrawerHintShown) ?? false;
     setState(() {
       _showDrawerHint = !shown;
     });
@@ -347,6 +371,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadDataForCurrentCategory() async {
+    if (!_settingsLoaded) return;
     setState(() {
       _loading = true;
       _error = null;
@@ -2393,12 +2418,16 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
           if (_loading)
-            const Positioned.fill(
-              child: ColoredBox(
-                color: Color(0x11000000),
-                child: Center(
-                  child: SpinKitFadingCircle(
-                      size: 48, color: Color.fromRGBO(255, 102, 255, 255)),
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: true,
+                child: ColoredBox(
+                  color: const Color(0x11000000),
+                  child: const Center(
+                    child: SpinKitFadingCircle(
+                        size: 48,
+                        color: Color.fromRGBO(255, 102, 255, 255)),
+                  ),
                 ),
               ),
             ),
@@ -2733,6 +2762,16 @@ class _HomeScreenState extends State<HomeScreen> {
                     onChangeOpenDrawerOnStart: (val) {
                       _setOpenDrawerOnStart(val);
                     },
+                    startCategory: _preferredStartCategory,
+                    categoryTitles: items,
+                    onChangeStartCategory: (cat) {
+                      _setStartCategoryPreference(cat);
+                      setState(() {
+                        _selectedCategory = cat;
+                        _clearActiveSelections();
+                      });
+                      _loadDataForCurrentCategory();
+                    },
                     appThemeSetting: widget.appThemeSetting,
                     onChangeTheme: widget.onChangeAppTheme,
                   ),
@@ -2757,15 +2796,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  DatasetCategory _categoryFromStorage(String? raw) {
+    if (raw == null || raw.isEmpty) {
+      return DatasetCategory.parking;
+    }
+    for (final category in DatasetCategory.values) {
+      if (category.name == raw) {
+        return category;
+      }
+    }
+    return DatasetCategory.parking;
+  }
+
   Map<DatasetCategory, String> _categoryTitles() => const {
-        DatasetCategory.parking: 'Parkplätze',
-        DatasetCategory.carsharing: 'Carsharing',
-        DatasetCategory.bikesharing: 'Bikesharing',
-        DatasetCategory.scooters: 'E-Scooter',
         DatasetCategory.transit: 'ÖPNV',
-        DatasetCategory.charging: 'Ladeinfrastruktur',
-        DatasetCategory.construction: 'Baustellen',
         DatasetCategory.bicycleNetwork: 'Radnetz',
+        DatasetCategory.bikesharing: 'Bike-Sharing',
+        DatasetCategory.scooters: 'Scooter-Sharing',
+        DatasetCategory.carsharing: 'Car-Sharing',
+        DatasetCategory.charging: 'Ladestationen',
+        DatasetCategory.parking: 'Parkplätze',
+        DatasetCategory.construction: 'Baustellen / Verkehrsmeldungen',
       };
 
   void _resetFiltersForCategory() {
