@@ -22,6 +22,13 @@ https://www.govdata.de/dl-de/by-2-0
 
 Weitere verwendete Lizenzen (z. B. Bibliotheken, Tile-Services, Icons) sind direkt im Impressum der App aufgelistet.
 
+# Demo im Browser ausprobieren
+Die App kann ohne Installation direkt im Browser ausprobiert werden:
+
+**http://85.215.128.121/**
+
+Hier laufen die Flutter-Web-Version sowie der zugehörige API-Server.
+
 ## Warum dieses Projekt?
 Die Idee zur App entstand auf einem Digitalisierungs­kongress des Verkehrsministeriums Baden-Württemberg in Stuttgart. Dort wurde deutlich, wie umfassend und wertvoll die offenen Mobilitätsdaten von **MobiData BW** sind – gleichzeitig aber auch, dass es bislang keine mobile App gibt, die diese Daten gebündelt und nutzerfreundlich aufbereitet. Der Dienst existiert primär als Webseite, und vielen Menschen scheint gar nicht bewusst, dass diese Informationen überhaupt frei zugänglich sind (obwohl wahrscheinlich viele Apps die einzelnen Dienste nutzen).
 
@@ -67,15 +74,6 @@ Für iOS
 ```bash
 flutter run -d ios
 ```
-
-
-
-# Demo im Browser ausprobieren
-Die App kann ohne Installation direkt im Browser ausprobiert werden:
-
-**http://85.215.128.121/**
-
-Hier laufen die Flutter-Web-Version sowie der zugehörige API-Server.
 
 ## Integrations Status
 
