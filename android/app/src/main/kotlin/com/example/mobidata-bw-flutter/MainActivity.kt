@@ -1,4 +1,4 @@
-package com.example.mobidata_bw_flutterer
+package org.codevember.mobidata_bw_flutterer
 
 import io.flutter.embedding.android.FlutterActivity
 

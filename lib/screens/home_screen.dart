@@ -7,6 +7,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:flutter_spinkit/flutter_spinkit.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/bicycle_network_service.dart';
 import '../services/charging_api_service.dart';
 import '../services/construction_api_service.dart';
 import '../services/gtfs_realtime_service.dart';
@@ -26,7 +27,7 @@ import '../models/bikesharing_station.dart';
 import '../models/scooter_vehicle.dart';
 import '../models/charging_station.dart';
 import '../models/construction_site.dart';
-//import '../models/bicycle_network.dart';
+import '../models/bicycle_segment.dart';
 
 import '../widgets/settings_sheet.dart';
 import '../widgets/drawer_hint.dart';
@@ -77,6 +78,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final ChargingApiService _chargingApiService = ChargingApiService();
   final ConstructionApiService _constructionApiService =
       ConstructionApiService();
+  final BicycleNetworkService _bicycleNetworkService = BicycleNetworkService();
 
   //LatLng _center = const LatLng(48.5216, 9.0576); // Tübingen, center of BW
   //LatLng _center = const LatLng(49.0068, 8.40365); // Karlsruhe
@@ -91,6 +93,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showFilterBar = true;
   final TextEditingController _searchController = TextEditingController();
   bool _searchingLocation = false;
+  bool _locatingUser = false;
 
   DatasetCategory _selectedCategory = DatasetCategory.parking;
   DatasetCategory _preferredStartCategory = DatasetCategory.parking;
@@ -154,6 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final Set<String> _expandedClusterKeys = <String>{};
 
   // bicycle network
+  List<BicycleSegment> _bicycleSegments = [];
 
   // init
   @override
@@ -272,6 +276,63 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _goToCurrentLocation() async {
+    if (_locatingUser) return;
+    setState(() {
+      _locatingUser = true;
+    });
+
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Standortdienste sind deaktiviert.'),
+            ),
+          );
+        }
+        return;
+      }
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Keine Standortberechtigung verfügbar.'),
+            ),
+          );
+        }
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition();
+      final target = LatLng(pos.latitude, pos.longitude);
+      setState(() {
+        _center = target;
+        if (_zoom < 14) {
+          _zoom = 14;
+        }
+      });
+      _moveMapIfReady();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Standortsuche fehlgeschlagen: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _locatingUser = false;
+        });
+      }
+    }
+  }
+
   void _moveMapIfReady() {
     if (!_mapReady) return;
     _mapController.move(_center, _zoom);
@@ -363,6 +424,9 @@ class _HomeScreenState extends State<HomeScreen> {
           break;
         case DatasetCategory.construction:
           _loadConstructionSites(showSpinner: false);
+          break;
+        case DatasetCategory.bicycleNetwork:
+          _loadBicycleNetwork();
           break;
         default:
           break;
@@ -551,6 +615,7 @@ class _HomeScreenState extends State<HomeScreen> {
           await _loadConstructionSites();
           break;
         case DatasetCategory.bicycleNetwork:
+          await _loadBicycleNetwork();
           break;
       }
     } catch (e) {
@@ -650,6 +715,33 @@ class _HomeScreenState extends State<HomeScreen> {
           _loading = false;
         });
       }
+    }
+  }
+
+  Future<void> _loadBicycleNetwork() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final bounds = _currentBounds();
+      final segments = await _bicycleNetworkService.fetchSegments(
+        bounds: bounds,
+      );
+      print('[HomeScreen] Drawing ${segments.length} Radnetz-Segmente');
+      setState(() {
+        _bicycleSegments = segments;
+      });
+    } catch (e) {
+      setState(() {
+        _bicycleSegments = [];
+        _error = 'Radnetz konnte nicht geladen werden: $e';
+      });
+    } finally {
+      setState(() {
+        _loading = false;
+      });
     }
   }
 
@@ -2191,9 +2283,12 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() => _chargingStations = filteredCharging);
         break;
       case DatasetCategory.construction:
-        final filteredConstruction = _constructionSites.where((s) {
-          return _isWithinBounds(s.lat, s.lon, bounds);
-        }).where((s) => !_showOnlyActiveConstruction || _isConstructionActive(s))
+        final filteredConstruction = _constructionSites
+            .where((s) {
+              return _isWithinBounds(s.lat, s.lon, bounds);
+            })
+            .where(
+                (s) => !_showOnlyActiveConstruction || _isConstructionActive(s))
             .toList();
         setState(() => _constructionSites = filteredConstruction);
         break;
@@ -2320,9 +2415,47 @@ class _HomeScreenState extends State<HomeScreen> {
                   ..._buildVehiclePositionMarkers(),
                 ],
               ),
+              if (_selectedCategory == DatasetCategory.bicycleNetwork)
+                PolylineLayer(
+                  polylines: _bicycleSegments
+                      .map(
+                        (segment) => Polyline(
+                          points: segment.points,
+                          strokeWidth: segment.strokeWidth,
+                          color: isDark
+                              ? const Color(0xFFFF66FF).withOpacity(0.85)
+                              : const Color(0xFFFF1744).withOpacity(0.75),
+                        ),
+                      )
+                      .toList(),
+                ),
             ],
           ),
           MapAttributionWidget(isDarkMode: isDark),
+          Positioned(
+            right: 16,
+            bottom: 74,
+            child: FloatingActionButton.small(
+              heroTag: 'locate_user',
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              onPressed: _locatingUser ? null : _goToCurrentLocation,
+              child: _locatingUser
+                  ? SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          Theme.of(context).colorScheme.onPrimary,
+                        ),
+                      ),
+                    )
+                  : Icon(
+                      Icons.my_location,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+            ),
+          ),
           AnimatedPositioned(
             duration: const Duration(milliseconds: 300),
             top: _showFilterBar
@@ -2423,10 +2556,35 @@ class _HomeScreenState extends State<HomeScreen> {
                 ignoring: true,
                 child: ColoredBox(
                   color: const Color(0x11000000),
-                  child: const Center(
-                    child: SpinKitFadingCircle(
-                        size: 48,
-                        color: Color.fromRGBO(255, 102, 255, 255)),
+                  child: Center(
+                    child: Builder(
+                      builder: (context) {
+                        final loadingMessage = _loadingMessageForCategory();
+                        return Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SpinKitFadingCircle(
+                              size: 48,
+                              color: Color.fromRGBO(255, 102, 255, 255),
+                            ),
+                            if (loadingMessage != null) ...[
+                              const SizedBox(height: 12),
+                              Card(
+                                elevation: 2,
+                                color: Theme.of(context).cardColor,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  child: Text(loadingMessage),
+                                ),
+                              ),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -2459,6 +2617,29 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
     );
+  }
+
+  String? _loadingMessageForCategory() {
+    switch (_selectedCategory) {
+      case DatasetCategory.parking:
+        return 'Lade Daten von ParkAPI...';
+      case DatasetCategory.charging:
+        return 'Lade Daten von OCPDB...';
+      case DatasetCategory.carsharing:
+        return 'Lade Daten vom GBFS-Feed...';
+      case DatasetCategory.bikesharing:
+        return 'Lade Daten vom GBFS-Feed...';
+      case DatasetCategory.scooters:
+        return 'Lade Daten vom GBFS-Feed...';
+      case DatasetCategory.construction:
+        return 'Lade TIC3-Meldungen...';
+      case DatasetCategory.transit:
+        return 'Lade Laden von GTFS-API...';
+      case DatasetCategory.bicycleNetwork:
+        return 'Lade Daten von RadVIS...';
+      default:
+        return null;
+    }
   }
 
   Widget _buildLegendForCategory() {
@@ -2600,7 +2781,34 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         );
-
+      case DatasetCategory.bicycleNetwork:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 32,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFFFF66FF)
+                      : const Color(0xFFFF1744),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Radnetz BW',
+                style: TextStyle(color: textColor, fontSize: 12),
+              ),
+            ],
+          ),
+        );
       default:
         return Container();
     }
@@ -2639,26 +2847,19 @@ class _HomeScreenState extends State<HomeScreen> {
         break;
     }
 
-    final isDisabled = cat == DatasetCategory.bicycleNetwork;
-
     return ListTile(
       leading: Icon(
         icon,
-        color: isDisabled
-            ? Colors.grey
-            : highlightColor ?? Theme.of(context).iconTheme.color,
+        color: highlightColor ?? Theme.of(context).iconTheme.color,
       ),
       title: Text(
         label,
         style: TextStyle(
-          color: isDisabled
-              ? Colors.grey
-              : highlightColor ?? Theme.of(context).colorScheme.onSurface,
+          color: highlightColor ?? Theme.of(context).colorScheme.onSurface,
         ),
       ),
-      enabled: !isDisabled,
       selected: isSelected,
-      onTap: isDisabled ? null : () => _onSelectCategory(cat),
+      onTap: () => _onSelectCategory(cat),
     );
   }
 
@@ -2686,6 +2887,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _selectedChargingStation = null;
     _selectedConstructionSite = null;
     _expandedClusterKeys.clear();
+    _bicycleSegments = [];
   }
 
   Widget _buildMainDrawer(BuildContext context) {

@@ -144,9 +144,6 @@ class SettingsSheetState extends State<SettingsSheet> {
                   border: OutlineInputBorder(),
                 ),
                 items: widget.categoryTitles.entries
-                    .where(
-                      (entry) => entry.key != DatasetCategory.bicycleNetwork,
-                    )
                     .map(
                       (entry) => DropdownMenuItem<DatasetCategory>(
                         value: entry.key,

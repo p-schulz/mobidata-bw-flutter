@@ -73,7 +73,7 @@ class CacheService {
       saveJsonList(keyParkingSites, list);
 
   List<Map<String, dynamic>>? loadParkingSites({
-    Duration maxAge = const Duration(minutes: 10),
+    Duration maxAge = const Duration(days: 365),
   }) =>
       loadJsonList(keyParkingSites, maxAge: maxAge);
 

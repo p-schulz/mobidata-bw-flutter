@@ -19,6 +19,10 @@ dependencies:
   hive_flutter: ^1.0.0
   path_provider: ^2.0.0
   gtfs_realtime_bindings: ^1.1.0
+  path: ^1.9.0
+  sqlite3: ^2.4.0
+  proj4dart: ^2.1.0
+  simplify: ^1.1.0
 
 dev_dependencies:
   flutter_test:
