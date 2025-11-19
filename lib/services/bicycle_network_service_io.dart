@@ -10,7 +10,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:proj4dart/proj4dart.dart' as proj4;
 import 'package:simplify/simplify.dart' as poly_simplify;
-import 'package:sqlite3/sqlite3.dart';
+import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
 import '../models/bicycle_segment.dart';
 
@@ -49,7 +49,7 @@ class BicycleNetworkService {
     }
 
     final file = await _ensureLocalFile();
-    final database = sqlite3.open(file.path);
+    final database = sqlite3.sqlite3.open(file.path);
     try {
       final tableName = _lookupFeatureTable(database);
       final geometryColumn = _lookupGeometryColumn(database, tableName);
@@ -61,7 +61,7 @@ class BicycleNetworkService {
 
       final reader = _GpkgGeometryReader(converter);
       final segments = <BicycleSegment>[];
-      var rowsExamined = 0;
+      int rowsExamined = 0;
 
       void runQuery({required bool useSpatialFilter}) {
         final queryBuffer = StringBuffer();
@@ -123,7 +123,7 @@ class BicycleNetworkService {
     }
   }
 
-  void _logDatasetInfo(Database db, String tableName) {
+  void _logDatasetInfo(sqlite3.Database db, String tableName) {
     if (_loggedDatasetInfo) return;
     try {
       final result = db.select('SELECT COUNT(*) as cnt FROM "$tableName"');
@@ -136,7 +136,7 @@ class BicycleNetworkService {
   }
 
   LatLng Function(double x, double y) _resolveCoordinateConverter(
-    Database db,
+    sqlite3.Database db,
     String tableName,
   ) {
     if (_coordinateConverter != null) return _coordinateConverter!;
@@ -244,15 +244,21 @@ class BicycleNetworkService {
       options: Options(responseType: ResponseType.bytes),
     );
     stopwatch.stop();
+    int size = 0;
+    try {
+      size = await tempFile.length();
+    } on PathNotFoundException {
+      // File might be moved/renamed already; ignore to prevent noisy error.
+    }
     print(
       '[BicycleNetwork] Download finished in '
-      '${stopwatch.elapsed.inSeconds}s, size ${await tempFile.length()} bytes',
+      '${stopwatch.elapsed.inSeconds}s, size ${size > 0 ? size : 'unknown'} bytes',
     );
     await tempFile.rename(file.path);
     return file;
   }
 
-  String _lookupFeatureTable(Database db) {
+  String _lookupFeatureTable(sqlite3.Database db) {
     final result = db.select(
       "SELECT table_name FROM gpkg_contents WHERE data_type = 'features'",
     );
@@ -274,7 +280,7 @@ class BicycleNetworkService {
     return result.first['table_name'] as String;
   }
 
-  String _lookupGeometryColumn(Database db, String tableName) {
+  String _lookupGeometryColumn(sqlite3.Database db, String tableName) {
     final result = db.select(
       'SELECT column_name FROM gpkg_geometry_columns '
       'WHERE table_name = ? LIMIT 1',
@@ -288,7 +294,7 @@ class BicycleNetworkService {
     return result.first['column_name'] as String;
   }
 
-  bool _hasTable(Database db, String name) {
+  bool _hasTable(sqlite3.Database db, String name) {
     final result = db.select(
       "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
       [name],

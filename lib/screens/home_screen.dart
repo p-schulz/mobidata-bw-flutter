@@ -90,7 +90,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = false;
   String? _error;
   Timer? _debounce;
-  bool _showFilterBar = true;
+  bool _showFilterBar = false;
   final TextEditingController _searchController = TextEditingController();
   bool _searchingLocation = false;
   bool _locatingUser = false;
@@ -2360,8 +2360,16 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         actions: [
           IconButton(
-            icon: Icon(_showFilterBar ? Icons.close : Icons.filter_list),
-            tooltip: _showFilterBar ? 'Filter verstecken' : 'Filter anzeigen',
+            icon: AnimatedRotation(
+              turns: _showFilterBar ? 0.0 : -0.25,
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                _showFilterBar
+                    ? Icons.filter_alt_off_outlined
+                    : Icons.filter_alt,
+              ),
+            ),
+            tooltip: _showFilterBar ? 'Filter ausblenden' : 'Filter anzeigen',
             onPressed: () {
               setState(() {
                 _showFilterBar = !_showFilterBar;
