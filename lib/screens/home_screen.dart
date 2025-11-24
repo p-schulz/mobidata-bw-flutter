@@ -30,7 +30,6 @@ import '../models/construction_site.dart';
 import '../models/bicycle_segment.dart';
 
 import '../widgets/settings_sheet.dart';
-import '../widgets/drawer_hint.dart';
 import '../widgets/imprint_sheet.dart';
 import '../widgets/filter_bar.dart';
 import '../widgets/map_attribution.dart';
@@ -38,6 +37,7 @@ import '../widgets/parking_info_card.dart';
 import '../widgets/transit_departure_board.dart';
 import '../widgets/charging_info_card.dart';
 import '../widgets/construction_zone_card.dart';
+import '../widgets/main_drawer.dart';
 
 class HomeScreen extends StatefulWidget {
   final AppThemeSetting appThemeSetting;
@@ -252,6 +252,41 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  void _openSettingsSheet(BuildContext context) {
+    Navigator.of(context).pop();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => SettingsSheet(
+        autoLoadOnMove: _autoLoadOnMove,
+        openDrawerOnStart: _openDrawerOnStart,
+        onChangeAutoLoadOnMove: _setAutoLoadOnMove,
+        onChangeOpenDrawerOnStart: _setOpenDrawerOnStart,
+        startCategory: _preferredStartCategory,
+        categoryTitles: _categoryTitles(),
+        onChangeStartCategory: (cat) {
+          _setStartCategoryPreference(cat);
+          setState(() {
+            _selectedCategory = cat;
+            _clearActiveSelections();
+          });
+          _loadDataForCurrentCategory();
+        },
+        appThemeSetting: widget.appThemeSetting,
+        onChangeTheme: widget.onChangeAppTheme,
+      ),
+    );
+  }
+
+  void _openImprintSheet(BuildContext context) {
+    Navigator.of(context).pop();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const ImpressumSheet(),
+    );
+  }
+
   Future<void> _ensureLocation() async {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -367,6 +402,7 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       });
       _moveMapIfReady();
+      _loadDataForCurrentCategory();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -2346,7 +2382,20 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                     )
-                  : null,
+                  : ValueListenableBuilder<TextEditingValue>(
+                      valueListenable: _searchController,
+                      builder: (_, value, __) {
+                        if (value.text.isEmpty) return const SizedBox.shrink();
+                        return IconButton(
+                          tooltip: 'Suchfeld leeren',
+                          icon: const Icon(Icons.close),
+                          color: theme.colorScheme.onSurfaceVariant,
+                          onPressed: () {
+                            setState(() => _searchController.clear());
+                          },
+                        );
+                      },
+                    ),
               filled: true,
               fillColor: theme.colorScheme.surfaceVariant
                   .withOpacity(isDark ? 0.3 : 1),
@@ -2378,7 +2427,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      drawer: _buildMainDrawer(context),
+      drawer: MainDrawer(
+        showDrawerHint: _showDrawerHint,
+        onCloseDrawerHint: _markDrawerHintAsShown,
+        categoryTitles: _categoryTitles(),
+        selectedCategory: _selectedCategory,
+        onSelectCategory: _onSelectCategory,
+        onOpenSettings: () => _openSettingsSheet(context),
+        onOpenImprint: () => _openImprintSheet(context),
+      ),
       body: Stack(
         children: [
           FlutterMap(
@@ -2490,7 +2547,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     showOnlyFreeParking: _filterOnlyFreeParking,
                     onToggleOnlyFreeParking: (val) {
                       setState(() => _filterOnlyFreeParking = val);
-                      _applyFiltersForCurrentCategory();
+                      _loadParking();
                     },
                     showOnlyWithCars: _filterOnlyWithCars,
                     onToggleOnlyWithCars: (val) {
@@ -2822,55 +2879,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Widget _buildCategoryTile(DatasetCategory cat, String label) {
-    final isSelected = _selectedCategory == cat;
-    final highlightColor =
-        isSelected ? Theme.of(context).colorScheme.primary : null;
-
-    IconData icon;
-    switch (cat) {
-      case DatasetCategory.parking:
-        icon = Icons.local_parking;
-        break;
-      case DatasetCategory.carsharing:
-        icon = Icons.directions_car;
-        break;
-      case DatasetCategory.bikesharing:
-        icon = Icons.pedal_bike;
-        break;
-      case DatasetCategory.scooters:
-        icon = Icons.electric_scooter;
-        break;
-      case DatasetCategory.transit:
-        icon = Icons.directions_bus;
-        break;
-      case DatasetCategory.charging:
-        icon = Icons.ev_station;
-        break;
-      case DatasetCategory.construction:
-        icon = Icons.construction;
-        break;
-      case DatasetCategory.bicycleNetwork:
-        icon = Icons.directions_bike;
-        break;
-    }
-
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: highlightColor ?? Theme.of(context).iconTheme.color,
-      ),
-      title: Text(
-        label,
-        style: TextStyle(
-          color: highlightColor ?? Theme.of(context).colorScheme.onSurface,
-        ),
-      ),
-      selected: isSelected,
-      onTap: () => _onSelectCategory(cat),
-    );
-  }
-
   void _onSelectCategory(DatasetCategory cat) {
     Navigator.of(context).pop();
     setState(() {
@@ -2896,114 +2904,6 @@ class _HomeScreenState extends State<HomeScreen> {
     _selectedConstructionSite = null;
     _expandedClusterKeys.clear();
     _bicycleSegments = [];
-  }
-
-  Widget _buildMainDrawer(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final Color drawerBg =
-        isDark ? const Color(0xff333333) : const Color(0xFFFF66FF);
-    final Color drawerTextColor =
-        isDark ? const Color(0xFFFF66FF) : Colors.white;
-    final Color drawerSubTextColor =
-        drawerTextColor.withOpacity(isDark ? 0.9 : 0.75);
-    final items = _categoryTitles();
-
-    return Drawer(
-      child: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: drawerBg,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'MobiData BW in Flutter',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: drawerTextColor,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '(Inoffiziell)',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: drawerSubTextColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (_showDrawerHint)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: DrawerHint(
-                  onClose: () {
-                    _markDrawerHintAsShown();
-                  },
-                ),
-              ),
-            Expanded(
-              child: ListView(
-                children: [
-                  for (final entry in items.entries)
-                    _buildCategoryTile(entry.key, entry.value),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            ListTile(
-              leading: const Icon(Icons.settings_outlined),
-              title: const Text('Einstellungen'),
-              onTap: () {
-                Navigator.of(context).pop();
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => SettingsSheet(
-                    autoLoadOnMove: _autoLoadOnMove,
-                    openDrawerOnStart: _openDrawerOnStart,
-                    onChangeAutoLoadOnMove: (val) {
-                      _setAutoLoadOnMove(val);
-                    },
-                    onChangeOpenDrawerOnStart: (val) {
-                      _setOpenDrawerOnStart(val);
-                    },
-                    startCategory: _preferredStartCategory,
-                    categoryTitles: items,
-                    onChangeStartCategory: (cat) {
-                      _setStartCategoryPreference(cat);
-                      setState(() {
-                        _selectedCategory = cat;
-                        _clearActiveSelections();
-                      });
-                      _loadDataForCurrentCategory();
-                    },
-                    appThemeSetting: widget.appThemeSetting,
-                    onChangeTheme: widget.onChangeAppTheme,
-                  ),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.info_outline),
-              title: const Text('Impressum & Lizenzen'),
-              onTap: () {
-                Navigator.of(context).pop();
-                showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => const ImpressumSheet(),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   DatasetCategory _categoryFromStorage(String? raw) {

@@ -1,8 +1,8 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart' as latlng;
 
 import '../models/charging_station.dart';
-import 'cache_service.dart';
 
 class ChargingApiService {
   ChargingApiService()
@@ -13,84 +13,55 @@ class ChargingApiService {
             receiveTimeout: const Duration(seconds: 20),
             headers: const {'Accept': 'application/json'},
           ),
-        ),
-        _cache = CacheService();
+        );
 
   final Dio _dio;
-  final CacheService _cache;
-  static const _baseUrl =
-      'https://api.mobidata-bw.de/ocpdb/api/public/v1';
-  static const int _pageSize = 500;
-  static const int _maxPages = 10;
+  static const _baseUrl = 'https://api.mobidata-bw.de/ocpdb/api/public/v1';
+  static const int _maxResults = 1000;
 
   Future<List<ChargingStation>> fetchStations({
     required LatLngBounds bounds,
     CancelToken? cancelToken,
-    bool forceRefresh = false,
   }) async {
-    final cacheKey = _boundsCacheKey(bounds);
-    if (!forceRefresh) {
-      final cached =
-          _cache.loadChargingStations(cacheKey, maxAge: const Duration(minutes: 20));
-      if (cached != null && cached.isNotEmpty) {
-        return _mapStations(cached);
-      }
-    }
-
     try {
-      final allItems = <Map<String, dynamic>>[];
-      final bbox =
-          '${bounds.west},${bounds.south},${bounds.east},${bounds.north}';
+      final centerLat = (bounds.north + bounds.south) / 2;
+      final centerLon = (bounds.east + bounds.west) / 2;
+      final radius = _radiusForBounds(bounds);
 
-      for (int page = 0; page < _maxPages; page++) {
-        final offset = page * _pageSize;
-        final res = await _dio.get(
-          '/locations',
-          cancelToken: cancelToken,
-          queryParameters: {
-            'bbox': bbox,
-            'limit': _pageSize,
-            'offset': offset,
-          },
-        );
-        if (res.data is! Map || res.data['items'] is! List) {
-          throw Exception('Unexpected charging response format');
-        }
+      final res = await _dio.get(
+        '/locations',
+        cancelToken: cancelToken,
+        queryParameters: {
+          'lat': centerLat,
+          'lon': centerLon,
+          'radius': radius,
+          'limit': _maxResults,
+        },
+      );
 
-        final items = (res.data['items'] as List)
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .toList();
-        allItems.addAll(items);
-
-        if (items.length < _pageSize) {
-          break;
-        }
+      if (res.data is! Map || res.data['items'] is! List) {
+        throw Exception('Unexpected charging response format');
       }
 
-      if (allItems.isEmpty) {
-        return const [];
-      }
-
-      final stations = _mapStations(allItems);
-
-      if (stations.isNotEmpty) {
-        await _cache.saveChargingStations(cacheKey, allItems);
-      }
-
-      return stations;
+      final items = (res.data['items'] as List)
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+      return _mapStations(items);
     } catch (e) {
-      final fallback =
-          _cache.loadChargingStations(cacheKey, maxAge: const Duration(hours: 1));
-      if (fallback != null && fallback.isNotEmpty) {
-        return _mapStations(fallback);
-      }
       rethrow;
     }
   }
 
-  String _boundsCacheKey(LatLngBounds bounds) {
-    String fmt(double v) => v.toStringAsFixed(3);
-    return '${fmt(bounds.west)}_${fmt(bounds.south)}_${fmt(bounds.east)}_${fmt(bounds.north)}';
+  int _radiusForBounds(LatLngBounds bounds) {
+    final latLngCenter = latlng.LatLng(
+      (bounds.north + bounds.south) / 2,
+      (bounds.east + bounds.west) / 2,
+    );
+    final corner = latlng.LatLng(bounds.north, bounds.east);
+    final distance = latlng.Distance();
+    final meters =
+        distance.as(latlng.LengthUnit.Meter, latLngCenter, corner).clamp(500, 20000);
+    return meters.round();
   }
 
   List<ChargingStation> _mapStations(List<Map<String, dynamic>> data) =>
