@@ -6,6 +6,7 @@ import '../models/parking_site.dart';
 import '../models/parking_spot.dart';
 import '../services/cache_service.dart';
 
+// TODO: Open status, realtime status
 class ParkApiService {
   final Dio _dio = Dio(
     BaseOptions(
@@ -164,7 +165,7 @@ class ParkApiService {
           }
         }
       }
-  }
+    }
 
     return out;
   }

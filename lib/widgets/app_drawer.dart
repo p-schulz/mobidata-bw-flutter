@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/categories.dart';
 import 'drawer_hint.dart';
 
-class MainDrawer extends StatelessWidget {
+class AppDrawer extends StatelessWidget {
   final bool showDrawerHint;
   final VoidCallback onCloseDrawerHint;
   final Map<DatasetCategory, String> categoryTitles;
@@ -12,7 +12,7 @@ class MainDrawer extends StatelessWidget {
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenImprint;
 
-  const MainDrawer({
+  const AppDrawer({
     super.key,
     required this.showDrawerHint,
     required this.onCloseDrawerHint,
@@ -28,9 +28,9 @@ class MainDrawer extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final Color drawerBg =
-        isDark ? const Color(0xff333333) : const Color(0xFFFF66FF);
+        isDark ? const Color.fromARGB(255, 25, 25, 25) : Colors.white;
     final Color drawerTextColor =
-        isDark ? const Color(0xFFFF66FF) : Colors.white;
+        isDark ? const Color.fromARGB(255, 88, 88, 88) : Colors.black;
     final Color drawerSubTextColor =
         drawerTextColor.withOpacity(isDark ? 0.9 : 0.75);
 

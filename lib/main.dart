@@ -66,41 +66,13 @@ class _MobiDataAppState extends State<MobiDataApp> {
     });
   }
 
-  ThemeMode get _themeMode {
-    switch (_appThemeSetting) {
-      case AppThemeSetting.light:
-        return ThemeMode.light;
-      case AppThemeSetting.dark:
-        return ThemeMode.dark;
-      case AppThemeSetting.system:
-      default:
-        return ThemeMode.system;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final baseLight = ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF004C97),
-        brightness: Brightness.light,
-      ),
-      useMaterial3: true,
-    );
-
-    final baseDark = ThemeData(
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFF004C97),
-        brightness: Brightness.dark,
-      ),
-      useMaterial3: true,
-    );
-
     return MaterialApp(
-      title: 'MobiData BW',
-      theme: baseLight,
-      darkTheme: baseDark,
-      themeMode: _themeMode,
+      title: 'MobiData BW flutter',
+      theme: AppThemeSettings.lightTheme,
+      darkTheme: AppThemeSettings.darkTheme,
+      themeMode: _appThemeSetting.themeMode,
       home: HomeScreen(
         appThemeSetting: _appThemeSetting,
         onChangeAppTheme: _setThemeSetting,

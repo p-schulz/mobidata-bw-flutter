@@ -271,8 +271,7 @@ class BicycleNetworkService {
     ];
     for (final name in preferred) {
       for (final row in result) {
-        if ((row['table_name'] as String).toLowerCase() ==
-            name.toLowerCase()) {
+        if ((row['table_name'] as String).toLowerCase() == name.toLowerCase()) {
           return row['table_name'] as String;
         }
       }
