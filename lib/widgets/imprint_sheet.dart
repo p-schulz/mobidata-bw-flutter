@@ -48,7 +48,7 @@ class ImpressumSheet extends StatelessWidget {
                 'für den Suchdienst von Adressen und Orte.\n '
                 '• Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0 \n'
                 '• Weitere Informationen: https://www.lgl-bw.de/ \n'
-                '• App-Entwicklung: Codevember e.V. (https://codevember.org), 2025',
+                '• App-Entwicklung: Patrick Schulz, Codevember e.V. (https://codevember.org), 2025',
               ),
               const SizedBox(height: 16),
               Text(
@@ -69,8 +69,8 @@ class ImpressumSheet extends StatelessWidget {
                   onPressed: () {
                     showLicensePage(
                       context: context,
-                      applicationName: 'MobiData BW in Flutter',
-                      applicationVersion: '0.1.0',
+                      applicationName: 'Mobility4BW',
+                      applicationVersion: '1.0.0',
                     );
                   },
                   icon: const Icon(Icons.article_outlined),

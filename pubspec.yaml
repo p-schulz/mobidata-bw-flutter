@@ -1,4 +1,4 @@
-name: mobidata_bw_flutter
+name: mobility4bw
 description: A minimal Flutter to browse MobiData BW data on a map.
 publish_to: "none"
 version: 0.1.0+1

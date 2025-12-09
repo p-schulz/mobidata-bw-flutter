@@ -3,11 +3,11 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 
-import 'package:mobidata_bw_flutter/services/gtfs_database_service.dart';
+//import 'package:mobidata-bw-flutter/services/gtfs_database_service.dart';
 
 Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  /*
   final service = GtfsDatabaseService.instance;
   await service.init(useBundledSeed: false, allowDownload: true);
 
@@ -23,4 +23,5 @@ Future<void> main(List<String> args) async {
 
   // ignore: avoid_print
   print('GTFS seed database written to $outputPath');
+  */
 }

@@ -40,7 +40,7 @@ class AppDrawer extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Mobilität mit Flutter',
+                    'Mobility4BW',
                     style: theme.textTheme.titleLarge?.copyWith(
                       color: colors.primaryText,
                     ),

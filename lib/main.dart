@@ -69,7 +69,7 @@ class _MobiDataAppState extends State<MobiDataApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'MobiData BW flutter',
+      title: 'Mobility4BW',
       theme: AppThemeSettings.lightTheme,
       darkTheme: AppThemeSettings.darkTheme,
       themeMode: _appThemeSetting.themeMode,
