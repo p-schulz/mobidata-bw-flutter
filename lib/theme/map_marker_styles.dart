@@ -99,8 +99,8 @@ class MapMarkerStyles {
   static Color chargingMarkerColor({required bool isSelected}) =>
       isSelected ? selectionColor : Colors.teal;
 
-  static final Color parkingSiteClusterColor = Colors.blueGrey.shade700;
-  static final Color parkingSpotClusterColor = Colors.orange.shade600;
+  static final Color parkingSpotClusterColor = Colors.blueGrey.shade700;
+  static final Color parkingSiteClusterColor = Color(0xFFFFCC00);
   static final Color transitClusterColor = Colors.indigoAccent;
   static final Color carsharingClusterColor = Colors.green.shade700;
   static final Color bikesharingClusterColor = Colors.green.shade700;

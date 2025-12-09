@@ -36,14 +36,23 @@ class ParkingInfoCard extends StatelessWidget {
                     spacing: 8,
                     runSpacing: 4,
                     children: [
-                      if (site.availableSpaces != null)
+                      if (site.capacity != null)
                         Text(
-                          'Kapazität: ${site.availableSpaces}',
+                          'Kapazität: ${site.capacity}',
                           style: theme.textTheme.bodySmall,
                         ),
-                      if (site.status != null)
+                      if (site.freeCapacity != null)
                         Text(
-                          'Status: ${site.status}',
+                          'Frei: ${site.freeCapacity}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      Text(
+                        'Status: ${site.status}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      if (site.openingHours != null)
+                        Text(
+                          'Öffnungszeiten: ${site.openingHours}',
                           style: theme.textTheme.bodySmall,
                         ),
                     ],
@@ -88,9 +97,11 @@ class _ParkingSheet extends StatelessWidget {
           children: [
             Text(site.name, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            if (site.availableSpaces != null)
-              Text('Kapazität: ${site.availableSpaces}'),
-            if (site.status != null) Text('Status: ${site.status}'),
+            if (site.capacity != null) Text('Kapazität: ${site.capacity}'),
+            if (site.freeCapacity != null) Text('Frei: ${site.freeCapacity}'),
+            Text('Status: ${site.status}'),
+            if (site.openingHours != null)
+              Text('Öffnungszeiten: ${site.openingHours}'),
             if (site.roadName != null) Text('Adresse: ${site.roadName}'),
             const SizedBox(height: 12),
             Row(

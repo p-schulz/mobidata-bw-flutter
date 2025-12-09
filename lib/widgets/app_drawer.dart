@@ -26,36 +26,37 @@ class AppDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final Color drawerBg =
-        isDark ? const Color.fromARGB(255, 25, 25, 25) : Colors.white;
-    final Color drawerTextColor =
-        isDark ? const Color.fromARGB(255, 88, 88, 88) : Colors.black;
-    final Color drawerSubTextColor =
-        drawerTextColor.withOpacity(isDark ? 0.9 : 0.75);
+    final colors = _DrawerThemeColors.fromTheme(theme);
 
     return Drawer(
+      backgroundColor: colors.background,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             DrawerHeader(
-              decoration: BoxDecoration(color: drawerBg),
+              decoration: BoxDecoration(color: colors.headerBackground),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'MobiData BW in Flutter',
+                    'Mobilität mit Flutter',
                     style: theme.textTheme.titleLarge?.copyWith(
-                      color: drawerTextColor,
+                      color: colors.primaryText,
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '(Inoffiziell)',
+                    'Nicht-offizielle App powered by',
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: drawerSubTextColor,
+                      color: colors.secondaryText,
                     ),
+                  ),
+                  const SizedBox(height: 16),
+                  Image.asset(
+                    'assets/mobidata-logo.png',
+                    height: 48,
+                    fit: BoxFit.contain,
                   ),
                 ],
               ),
@@ -74,6 +75,7 @@ class AppDrawer extends StatelessWidget {
                       label: entry.value,
                       selectedCategory: selectedCategory,
                       onTap: onSelectCategory,
+                      colors: colors,
                     ),
                 ],
               ),
@@ -81,12 +83,24 @@ class AppDrawer extends StatelessWidget {
             const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.settings_outlined),
-              title: const Text('Einstellungen'),
+              title: Text(
+                'Einstellungen',
+                style: TextStyle(color: colors.menuTileText),
+              ),
+              iconColor: colors.menuTileText,
+              textColor: colors.menuTileText,
+              tileColor: colors.menuTileBackground,
               onTap: onOpenSettings,
             ),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('Impressum & Lizenzen'),
+              title: Text(
+                'Impressum & Lizenzen',
+                style: TextStyle(color: colors.menuTileText),
+              ),
+              iconColor: colors.menuTileText,
+              textColor: colors.menuTileText,
+              tileColor: colors.menuTileBackground,
               onTap: onOpenImprint,
             ),
           ],
@@ -101,19 +115,26 @@ class _DrawerCategoryTile extends StatelessWidget {
   final String label;
   final DatasetCategory selectedCategory;
   final ValueChanged<DatasetCategory> onTap;
+  final _DrawerThemeColors colors;
 
   const _DrawerCategoryTile({
     required this.category,
     required this.label,
     required this.selectedCategory,
     required this.onTap,
+    required this.colors,
   });
 
   @override
   Widget build(BuildContext context) {
     final isSelected = category == selectedCategory;
-    final highlightColor =
-        isSelected ? Theme.of(context).colorScheme.primary : null;
+    final textColor =
+        isSelected ? colors.tileSelectedText : colors.tileUnselectedText;
+    final backgroundColor =
+        isSelected ? colors.tileSelectedBackground : Colors.transparent;
+    final iconColor = isSelected
+        ? colors.tileSelectedIconColor
+        : colors.tileUnselectedIconColor;
 
     IconData icon;
     switch (category) {
@@ -143,19 +164,124 @@ class _DrawerCategoryTile extends StatelessWidget {
         break;
     }
 
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: highlightColor ?? Theme.of(context).iconTheme.color,
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(12),
       ),
-      title: Text(
-        label,
-        style: TextStyle(
-          color: highlightColor ?? Theme.of(context).colorScheme.onSurface,
+      child: ListTile(
+        leading: Icon(
+          icon,
+          color: iconColor,
         ),
+        title: Text(
+          label,
+          style: TextStyle(color: textColor),
+        ),
+        selected: isSelected,
+        selectedTileColor: colors.tileSelectedBackground,
+        onTap: () => onTap(category),
       ),
-      selected: isSelected,
-      onTap: () => onTap(category),
     );
   }
+}
+
+class _DrawerThemeColors {
+  final Color background;
+  final Color headerBackground;
+  final Color primaryText;
+  final Color secondaryText;
+  final Color tileSelectedBackground;
+  final Color tileSelectedText;
+  final Color tileUnselectedText;
+  final Color tileSelectedIconColor;
+  final Color tileUnselectedIconColor;
+  final Color menuTileBackground;
+  final Color menuTileText;
+
+  const _DrawerThemeColors({
+    required this.background,
+    required this.headerBackground,
+    required this.primaryText,
+    required this.secondaryText,
+    required this.tileSelectedBackground,
+    required this.tileSelectedText,
+    required this.tileUnselectedText,
+    required this.tileSelectedIconColor,
+    required this.tileUnselectedIconColor,
+    required this.menuTileBackground,
+    required this.menuTileText,
+  });
+
+  factory _DrawerThemeColors.fromTheme(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    final primary = theme.colorScheme.primary;
+    final onPrimary = theme.colorScheme.onPrimary;
+    if (isDark) {
+      return _DrawerThemeColors(
+        background: const Color(0xFF111111),
+        headerBackground: const Color(0xFF1C1C1C),
+        primaryText: Colors.white,
+        secondaryText: Colors.white70,
+        tileSelectedBackground: Color(0xFF006EAF),
+        tileSelectedText: Colors.white,
+        tileUnselectedText: Colors.grey[300]!,
+        tileSelectedIconColor: Color(0xFFFFCC00),
+        tileUnselectedIconColor: Colors.white70,
+        menuTileBackground: Colors.black,
+        menuTileText: Colors.white,
+      );
+    }
+
+    return _DrawerThemeColors(
+      background: Colors.white,
+      headerBackground: const Color(0xFFF4F6FB),
+      primaryText: const Color(0xFF0E233C),
+      secondaryText: const Color(0xFF4A5D74),
+      tileSelectedBackground: Color(0xFF006EAF),
+      tileSelectedText: Colors.white,
+      tileUnselectedText: const Color(0xFF232323),
+      tileSelectedIconColor: Color(0xFFFFCC00),
+      tileUnselectedIconColor: const Color(0xFF616161),
+      menuTileBackground: const Color(0xFFF1F3F7),
+      menuTileText: const Color(0xFF1B1F2B),
+    );
+  }
+
+  /*
+  factory _DrawerThemeColors.fromTheme(ThemeData theme) {
+    final isDark = theme.brightness == Brightness.dark;
+    final primary = theme.colorScheme.primary;
+    final onPrimary = theme.colorScheme.onPrimary;
+    if (isDark) {
+      return _DrawerThemeColors(
+        background: const Color(0xFF111111),
+        headerBackground: const Color(0xFF1C1C1C),
+        primaryText: Colors.white,
+        secondaryText: Colors.white70,
+        tileSelectedBackground: primary.withOpacity(0.25),
+        tileSelectedText: onPrimary,
+        tileUnselectedText: Colors.white.withOpacity(0.9),
+        tileSelectedIconColor: onPrimary,
+        tileUnselectedIconColor: Colors.white70,
+        menuTileBackground: Colors.white.withOpacity(0.05),
+        menuTileText: Colors.white,
+      );
+    }
+
+    return _DrawerThemeColors(
+      background: Colors.white,
+      headerBackground: const Color(0xFFF4F6FB),
+      primaryText: const Color(0xFF0E233C),
+      secondaryText: const Color(0xFF4A5D74),
+      tileSelectedBackground: primary.withOpacity(0.12),
+      tileSelectedText: primary,
+      tileUnselectedText: const Color(0xFF232323),
+      tileSelectedIconColor: primary,
+      tileUnselectedIconColor: const Color(0xFF616161),
+      menuTileBackground: const Color(0xFFF1F3F7),
+      menuTileText: const Color(0xFF1B1F2B),
+    );
+  }*/
 }

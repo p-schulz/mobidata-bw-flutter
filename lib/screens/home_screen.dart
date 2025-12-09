@@ -116,6 +116,7 @@ class _HomeScreenState extends State<HomeScreen> {
   ParkingSpot? _selectedSpot;
   bool _showOnlyAvailable = false;
   bool _filterOnlyFreeParking = false;
+  bool _filterOnlyOpenParking = false;
 
   // carsharing
   List<CarsharingOffer> _carsharingOffers = [];
@@ -920,13 +921,20 @@ class _HomeScreenState extends State<HomeScreen> {
         return false;
       }
 
-      if (_showOnlyAvailable &&
-          !(s.availableSpaces != null && s.availableSpaces! > 0)) {
+      final freeCapacity = s.freeCapacity;
+      final isOpen = s.isCurrentlyOpen;
+      if (_showOnlyAvailable && !(freeCapacity != null && freeCapacity > 0)) {
         return false;
       }
 
       if (_filterOnlyFreeParking) {
-        if (s.availableSpaces == null || s.availableSpaces! <= 0) {
+        if (freeCapacity == null || freeCapacity <= 0) {
+          return false;
+        }
+      }
+
+      if (_filterOnlyOpenParking) {
+        if (!s.hasRealtimeData || isOpen != true) {
           return false;
         }
       }
@@ -977,22 +985,24 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showParkingInfo(ParkingSite s) {
     showModalBottomSheet(
       context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(16),
-        child: Wrap(
-          runSpacing: 8,
-          children: [
-            Text(s.name ?? 'Parkplatz',
-                style: Theme.of(context).textTheme.titleLarge),
-            if (s.totalSpaces != null)
-              Text('Stellplätze gesamt: ${s.totalSpaces}'),
-            if (s.availableSpaces != null) Text('frei: ${s.availableSpaces}'),
-            if (s.isOpenNow != null)
-              Text(s.isOpenNow! ? 'Geöffnet' : 'Geschlossen'),
-            if (s.lastUpdate != null) Text('Stand: ${s.lastUpdate}'),
-          ],
-        ),
-      ),
+      builder: (_) {
+        final isOpen = s.isCurrentlyOpen;
+        return Padding(
+          padding: const EdgeInsets.all(16),
+          child: Wrap(
+            runSpacing: 8,
+            children: [
+              Text(s.name, style: Theme.of(context).textTheme.titleLarge),
+              if (s.capacity != null) Text('Kapazität: ${s.capacity}'),
+              if (s.freeCapacity != null) Text('Frei: ${s.freeCapacity}'),
+              if (isOpen != null) Text(isOpen ? 'Geöffnet' : 'Geschlossen'),
+              if (s.openingHours != null)
+                Text('Öffnungszeiten: ${s.openingHours}'),
+              if (s.lastUpdate != null) Text('Stand: ${s.lastUpdate}'),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -2570,6 +2580,11 @@ class _HomeScreenState extends State<HomeScreen> {
                       setState(() => _filterOnlyFreeParking = val);
                       _loadParking();
                     },
+                    showOnlyOpenParking: _filterOnlyOpenParking,
+                    onToggleOnlyOpenParking: (val) {
+                      setState(() => _filterOnlyOpenParking = val);
+                      _loadParking();
+                    },
                     showOnlyWithCars: _filterOnlyWithCars,
                     onToggleOnlyWithCars: (val) {
                       setState(() => _filterOnlyWithCars = val);
@@ -2963,6 +2978,7 @@ class _HomeScreenState extends State<HomeScreen> {
         setState(() {
           _showOnlyAvailable = false;
           _filterOnlyFreeParking = false;
+          _filterOnlyOpenParking = false;
         });
         _loadParking();
         break;

@@ -14,6 +14,8 @@ class FilterBar extends StatelessWidget {
     // Parking
     this.showOnlyFreeParking = false,
     this.onToggleOnlyFreeParking,
+    this.showOnlyOpenParking = false,
+    this.onToggleOnlyOpenParking,
 
     // Carsharing
     this.showOnlyWithCars = false,
@@ -54,6 +56,8 @@ class FilterBar extends StatelessWidget {
   // --- Parking ---
   final bool showOnlyFreeParking;
   final ValueChanged<bool>? onToggleOnlyFreeParking;
+  final bool showOnlyOpenParking;
+  final ValueChanged<bool>? onToggleOnlyOpenParking;
 
   // --- Carsharing ---
   final bool showOnlyWithCars;
@@ -98,6 +102,13 @@ class FilterBar extends StatelessWidget {
           label: const Text('nur freie Parkplätze'),
           selected: showOnlyFreeParking,
           onSelected: onToggleOnlyFreeParking,
+        ),
+      );
+      chips.add(
+        FilterChip(
+          label: const Text('nur geöffnet'),
+          selected: showOnlyOpenParking,
+          onSelected: onToggleOnlyOpenParking,
         ),
       );
     }
