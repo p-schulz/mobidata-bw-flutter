@@ -2366,7 +2366,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final categoryTitles = _categoryTitles();
     final appBarTitle = categoryTitles[_selectedCategory] ?? 'MobiData BW';
-    final searchHint = 'Suche nach: $appBarTitle';
+    final searchHint = 'Wo geht\'s hin?'; //': $appBarTitle';
 
     return Scaffold(
       key: _scaffoldKey,
@@ -2489,7 +2489,7 @@ class _HomeScreenState extends State<HomeScreen> {
               //      ? 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
               //      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // standard OSM
               //  subdomains: const ['a', 'b', 'c'],
-              //  userAgentPackageName: 'org.codevember.mobidata_bw_flutter',
+              //  userAgentPackageName: 'de.schulz.mobility4bw',
               //),
               FutureBuilder<Style>(
                 future: _loadMapStyle(isDark),

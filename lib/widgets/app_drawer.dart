@@ -47,7 +47,7 @@ class AppDrawer extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Nicht-offizielle App powered by',
+                    'Mobility App for BW powered by',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: colors.secondaryText,
                     ),

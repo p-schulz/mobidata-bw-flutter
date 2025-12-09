@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "org.codevember" "\0"
-            VALUE "FileDescription", "mobidata_bw_flutterer" "\0"
+            VALUE "CompanyName", "de.schulz" "\0"
+            VALUE "FileDescription", "mobility4bw" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "mobidata_bw_flutterer" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 org.codevember. All rights reserved." "\0"
-            VALUE "OriginalFilename", "mobidata_bw_flutterer.exe" "\0"
-            VALUE "ProductName", "mobidata_bw_flutterer" "\0"
+            VALUE "InternalName", "mobility4bw" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2025 de.schulz. All rights reserved." "\0"
+            VALUE "OriginalFilename", "mobility4bw.exe" "\0"
+            VALUE "ProductName", "mobility4bw" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

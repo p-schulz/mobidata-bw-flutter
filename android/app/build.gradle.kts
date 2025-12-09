@@ -17,7 +17,7 @@ plugins {
 }
 
 android {
-    namespace = "de.schulzi.mobility4bw"
+    namespace = "de.schulz.mobility4bw"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -32,7 +32,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "de.schulzi.mobility4bw"
+        applicationId = "de.schulz.mobility4bw"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

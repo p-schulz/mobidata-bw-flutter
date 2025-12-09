@@ -1,4 +1,4 @@
-package org.codevember.mobidata_bw_flutterer
+package de.schulz.mobility4bw
 
 import io.flutter.embedding.android.FlutterActivity
 
