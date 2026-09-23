@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -117,6 +118,15 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _showOnlyAvailable = false;
   bool _filterOnlyFreeParking = false;
   bool _filterOnlyOpenParking = false;
+
+  // full parking dataset kept in memory; map moves only filter these lists
+  List<ParkingSite> _allParkingSites = [];
+  List<ParkingSpot> _allParkingSpots = [];
+  DateTime? _parkingFetchedAt;
+  static const Duration _parkingRefreshInterval = Duration(minutes: 5);
+
+  // cluster results per namespace, reused until the items or zoom level change
+  final Map<String, _ClusterCacheEntry> _clusterCache = {};
 
   // carsharing
   List<CarsharingOffer> _carsharingOffers = [];
@@ -517,10 +527,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
       switch (_selectedCategory) {
         case DatasetCategory.parking:
-          final sites = await _parkApiService.fetchParkingSites();
-          final spots = await _parkApiService.fetchParkingSpots();
-          final filteredSites = _filterParkingSitesWithinBounds(sites, bounds);
-          final filteredSpots = _filterParkingSpotsWithinBounds(spots, bounds);
+          await _ensureParkingData();
+          final filteredSites =
+              _filterParkingSitesWithinBounds(_allParkingSites, bounds);
+          final filteredSpots =
+              _filterParkingSpotsWithinBounds(_allParkingSpots, bounds);
           setState(() {
             _parkingSites = filteredSites;
             _parkingSpots = filteredSpots;
@@ -700,34 +711,54 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _loadParking() async {
+  bool get _parkingDataIsStale =>
+      _parkingFetchedAt == null ||
+      DateTime.now().difference(_parkingFetchedAt!) > _parkingRefreshInterval;
+
+  /// Fetches and parses the full parking dataset only when the in-memory copy
+  /// is missing or older than [_parkingRefreshInterval].
+  Future<void> _ensureParkingData() async {
+    if (!_parkingDataIsStale) return;
+    _allParkingSites = await _parkApiService.fetchParkingSites();
+    _allParkingSpots = await _parkApiService.fetchParkingSpots();
+    _parkingFetchedAt = DateTime.now();
+  }
+
+  void _applyParkingFilters() {
+    final b = _currentBounds();
+    final filteredSites = _filterParkingSitesWithinBounds(_allParkingSites, b);
+    final filteredSpots = _filterParkingSpotsWithinBounds(_allParkingSpots, b);
     setState(() {
-      _loading = true;
-      _error = null;
+      _parkingSites = filteredSites;
+      _parkingSpots = filteredSpots;
     });
+  }
+
+  Future<void> _loadParking() async {
+    final needsFetch = _parkingDataIsStale;
+    if (needsFetch) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
-      final allSites = await _parkApiService.fetchParkingSites();
-      final allSpots = await _parkApiService.fetchParkingSpots();
-
-      final b = _currentBounds();
-
-      final filteredSites = _filterParkingSitesWithinBounds(allSites, b);
-      final filteredSpots = _filterParkingSpotsWithinBounds(allSpots, b);
-
-      setState(() {
-        _parkingSites = filteredSites;
-        _parkingSpots = filteredSpots;
-      });
+      await _ensureParkingData();
+      if (!mounted) return;
+      _applyParkingFilters();
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
       });
       print('[HomeScreen] error: $e');
     } finally {
-      setState(() {
-        _loading = false;
-      });
+      if (needsFetch && mounted) {
+        setState(() {
+          _loading = false;
+        });
+      }
     }
   }
 
@@ -1286,9 +1317,13 @@ class _HomeScreenState extends State<HomeScreen> {
   static const double _minMarkerZoom = 10.0;
 
   List<Marker> _buildMarkersForCategory() {
-    // Apply the global zoom threshold unless the category explicitly ignores it (construction stays visible at all zoom levels).
+    // Apply the global zoom threshold unless the category explicitly ignores it.
+    // Parking and construction are fully loaded client-side and clustered, so
+    // they stay visible at all zoom levels. The other categories query their
+    // APIs by bounding box, so a BW-wide request would be too expensive.
     final shouldApplyZoomLimit =
-        _selectedCategory != DatasetCategory.construction;
+        _selectedCategory != DatasetCategory.construction &&
+            _selectedCategory != DatasetCategory.parking;
     if (shouldApplyZoomLimit && _zoom < _minMarkerZoom) {
       return const [];
     }
@@ -1314,10 +1349,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Marker> _buildParkingMarkers() {
     final clusters = _clusterItems<ParkingSite>(
-      items:
-          _parkingSites.where((s) => s.lat != null && s.lon != null).toList(),
+      // _filterParkingSitesWithinBounds already drops sites without coordinates
+      items: _parkingSites,
       namespace: 'parking_site',
-      getId: (s) => s.id ?? '${s.lat}_${s.lon}',
       getLat: (s) => s.lat!,
       getLon: (s) => s.lon!,
     );
@@ -1336,11 +1370,7 @@ class _HomeScreenState extends State<HomeScreen> {
             center: cluster.center,
             count: cluster.items.length,
             color: MapMarkerStyles.parkingSiteClusterColor,
-            onTap: () {
-              setState(() {
-                _expandedClusterKeys.add(cluster.key);
-              });
-            },
+            onTap: () => _onClusterTap(cluster),
           ));
         }
       } else if (cluster.items.isNotEmpty) {
@@ -1351,7 +1381,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final spotClusters = _clusterItems<ParkingSpot>(
       items: _parkingSpots,
       namespace: 'parking_spot',
-      getId: (s) => s.id ?? '${s.lat}_${s.lon}',
       getLat: (s) => s.lat,
       getLon: (s) => s.lon,
     );
@@ -1369,11 +1398,7 @@ class _HomeScreenState extends State<HomeScreen> {
             center: cluster.center,
             count: cluster.items.length,
             color: MapMarkerStyles.parkingSpotClusterColor,
-            onTap: () {
-              setState(() {
-                _expandedClusterKeys.add(cluster.key);
-              });
-            },
+            onTap: () => _onClusterTap(cluster),
           ));
         }
       } else if (cluster.items.isNotEmpty) {
@@ -1489,7 +1514,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final clusters = _clusterItems<TransitStop>(
       items: _transitStops,
       namespace: 'transit',
-      getId: (s) => s.id,
       getLat: (s) => s.lat,
       getLon: (s) => s.lon,
     );
@@ -1508,11 +1532,7 @@ class _HomeScreenState extends State<HomeScreen> {
             center: cluster.center,
             count: cluster.items.length,
             color: MapMarkerStyles.transitClusterColor,
-            onTap: () {
-              setState(() {
-                _expandedClusterKeys.add(cluster.key);
-              });
-            },
+            onTap: () => _onClusterTap(cluster),
           ));
         }
       } else if (cluster.items.isNotEmpty) {
@@ -1588,7 +1608,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final clusters = _clusterItems<CarsharingOffer>(
       items: _carsharingOffers,
       namespace: 'carsharing',
-      getId: (o) => o.id ?? '${o.lat}_${o.lon}',
       getLat: (o) => o.lat,
       getLon: (o) => o.lon,
     );
@@ -1607,11 +1626,7 @@ class _HomeScreenState extends State<HomeScreen> {
             center: cluster.center,
             count: cluster.items.length,
             color: MapMarkerStyles.carsharingClusterColor,
-            onTap: () {
-              setState(() {
-                _expandedClusterKeys.add(cluster.key);
-              });
-            },
+            onTap: () => _onClusterTap(cluster),
           ));
         }
       } else if (cluster.items.isNotEmpty) {
@@ -1673,7 +1688,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final clusters = _clusterItems<BikesharingStation>(
       items: _bikesharingStations,
       namespace: 'bikesharing',
-      getId: (s) => s.id ?? '${s.lat}_${s.lon}',
       getLat: (s) => s.lat,
       getLon: (s) => s.lon,
     );
@@ -1692,11 +1706,7 @@ class _HomeScreenState extends State<HomeScreen> {
             center: cluster.center,
             count: cluster.items.length,
             color: MapMarkerStyles.bikesharingClusterColor,
-            onTap: () {
-              setState(() {
-                _expandedClusterKeys.add(cluster.key);
-              });
-            },
+            onTap: () => _onClusterTap(cluster),
           ));
         }
       } else if (cluster.items.isNotEmpty) {
@@ -1761,7 +1771,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final clusters = _clusterItems<ScooterVehicle>(
       items: _scooterVehicles,
       namespace: 'scooter',
-      getId: (s) => s.id ?? '${s.lat}_${s.lon}',
       getLat: (s) => s.lat,
       getLon: (s) => s.lon,
     );
@@ -1780,11 +1789,7 @@ class _HomeScreenState extends State<HomeScreen> {
             center: cluster.center,
             count: cluster.items.length,
             color: MapMarkerStyles.scooterClusterColor,
-            onTap: () {
-              setState(() {
-                _expandedClusterKeys.add(cluster.key);
-              });
-            },
+            onTap: () => _onClusterTap(cluster),
           ));
         }
       } else if (cluster.items.isNotEmpty) {
@@ -1890,7 +1895,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final clusters = _clusterItems<ConstructionSite>(
       items: _constructionSites,
       namespace: 'construction',
-      getId: (s) => s.id,
       getLat: (s) => s.lat,
       getLon: (s) => s.lon,
     );
@@ -1909,11 +1913,7 @@ class _HomeScreenState extends State<HomeScreen> {
             center: cluster.center,
             count: cluster.items.length,
             color: MapMarkerStyles.constructionClusterColor,
-            onTap: () {
-              setState(() {
-                _expandedClusterKeys.add(cluster.key);
-              });
-            },
+            onTap: () => _onClusterTap(cluster),
           ));
         }
       } else if (cluster.items.isNotEmpty) {
@@ -1980,7 +1980,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final clusters = _clusterItems<ChargingStation>(
       items: _chargingStations,
       namespace: 'charging',
-      getId: (s) => s.id,
       getLat: (s) => s.lat,
       getLon: (s) => s.lon,
     );
@@ -1999,11 +1998,7 @@ class _HomeScreenState extends State<HomeScreen> {
             center: cluster.center,
             count: cluster.items.length,
             color: MapMarkerStyles.chargingClusterColor,
-            onTap: () {
-              setState(() {
-                _expandedClusterKeys.add(cluster.key);
-              });
-            },
+            onTap: () => _onClusterTap(cluster),
           ));
         }
       } else if (cluster.items.isNotEmpty) {
@@ -2286,18 +2281,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     switch (_selectedCategory) {
       case DatasetCategory.parking:
-        final filteredSites = _filterParkingSitesWithinBounds(
-          _parkingSites,
-          bounds,
-        );
-        final filteredSpots = _filterParkingSpotsWithinBounds(
-          _parkingSpots,
-          bounds,
-        );
-        setState(() {
-          _parkingSites = filteredSites;
-          _parkingSpots = filteredSpots;
-        });
+        _applyParkingFilters();
         break;
 
       case DatasetCategory.carsharing:
@@ -2475,8 +2459,15 @@ class _HomeScreenState extends State<HomeScreen> {
                 _loadDataForCurrentCategory();
               },
               onPositionChanged: (pos, hasGesture) {
+                final previousZoomLevel = _zoom.floor();
                 _center = pos.center ?? _center;
                 _zoom = pos.zoom ?? _zoom;
+
+                // Re-cluster right away when crossing an integer zoom level
+                // instead of waiting for the debounced data reload.
+                if (_zoom.floor() != previousZoomLevel) {
+                  setState(() {});
+                }
 
                 if (hasGesture == true && _autoLoadOnMove) {
                   _onMapMovedDebounced();
@@ -2489,7 +2480,7 @@ class _HomeScreenState extends State<HomeScreen> {
               //      ? 'https://cartodb-basemaps-{s}.global.ssl.fastly.net/dark_all/{z}/{x}/{y}.png'
               //      : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // standard OSM
               //  subdomains: const ['a', 'b', 'c'],
-              //  userAgentPackageName: 'de.schulz.mobility4bw',
+              //  userAgentPackageName: 'de.schulzi.mobility4bw',
               //),
               FutureBuilder<Style>(
                 future: _loadMapStyle(isDark),
@@ -3022,65 +3013,74 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  double _clusterRadiusMeters() {
-    if (_zoom >= 17) return 40;
-    if (_zoom >= 15) return 90;
-    if (_zoom >= 13) return 180;
-    if (_zoom >= 11) return 320;
-    return 600;
-  }
+  static const double _clusterCellPx = 64.0;
 
+  /// Groups items into square screen-space cells of [_clusterCellPx] at the
+  /// current integer zoom level (Web Mercator). This is a single O(n) pass and
+  /// keeps clusters the same on-screen size at every zoom. Results are cached
+  /// per namespace until the item list instance or the zoom level changes.
   List<_Cluster<T>> _clusterItems<T>({
     required List<T> items,
     required String namespace,
     required double Function(T) getLat,
     required double Function(T) getLon,
-    required String Function(T) getId,
   }) {
-    final clusters = <_Cluster<T>>[];
-    final distance = Distance();
-    final radius = _clusterRadiusMeters();
+    final z = _zoom.floor();
+    final cached = _clusterCache[namespace];
+    if (cached != null && cached.zoom == z && identical(cached.items, items)) {
+      return cached.clusters as List<_Cluster<T>>;
+    }
+
+    final scale = 256 * math.pow(2, z) / _clusterCellPx;
+    final cells = <String, _Cluster<T>>{};
 
     for (final item in items) {
-      final point = LatLng(getLat(item), getLon(item));
-      _Cluster<T>? target;
-      for (final cluster in clusters) {
-        final dist = distance.as(LengthUnit.Meter, cluster.center, point);
-        if (dist <= radius) {
-          target = cluster;
-          break;
-        }
-      }
+      final lat = getLat(item);
+      final lon = getLon(item);
+      final sinLat = math.sin(lat.clamp(-85.05, 85.05) * math.pi / 180);
+      final cx = ((lon + 180) / 360 * scale).floor();
+      final cy = ((0.5 -
+                  math.log((1 + sinLat) / (1 - sinLat)) / (4 * math.pi)) *
+              scale)
+          .floor();
+      final key = '$namespace|$z|$cx|$cy';
 
-      if (target != null) {
-        target.items.add(item);
-        target.latSum += point.latitude;
-        target.lonSum += point.longitude;
-        target.center = LatLng(
-          target.latSum / target.items.length,
-          target.lonSum / target.items.length,
-        );
+      final cluster = cells[key];
+      if (cluster == null) {
+        cells[key] = _Cluster<T>(item: item, lat: lat, lon: lon)..key = key;
       } else {
-        clusters.add(
-          _Cluster<T>(
-            items: [item],
-            latSum: point.latitude,
-            lonSum: point.longitude,
-          ),
-        );
+        cluster.add(item, lat, lon);
       }
     }
 
-    for (final cluster in clusters) {
-      final ids = cluster.items.map(getId).where((id) => id.isNotEmpty).toList()
-        ..sort();
-      final rawKey = ids.isNotEmpty
-          ? ids.join('|')
-          : '${cluster.center.latitude}_${cluster.center.longitude}';
-      cluster.key = '$namespace|$rawKey';
-    }
-
+    final clusters = cells.values.toList();
+    _clusterCache[namespace] = _ClusterCacheEntry(
+      items: items,
+      zoom: z,
+      clusters: clusters,
+    );
     return clusters;
+  }
+
+  /// Zooms in to fit the cluster. At the highest zoom levels (or when zooming
+  /// cannot split the cluster any further) the cluster is expanded in place.
+  void _onClusterTap(_Cluster<dynamic> cluster) {
+    const maxFitZoom = 18.0;
+    final b = cluster.bounds;
+    final isSinglePoint = b.north == b.south && b.east == b.west;
+    if (_zoom >= maxFitZoom - 1 || isSinglePoint) {
+      setState(() {
+        _expandedClusterKeys.add(cluster.key);
+      });
+      return;
+    }
+    _mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: cluster.bounds,
+        padding: const EdgeInsets.all(64),
+        maxZoom: maxFitZoom,
+      ),
+    );
   }
 
   Marker _buildClusterMarker({
@@ -3130,14 +3130,50 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class _Cluster<T> {
   _Cluster({
-    required this.items,
-    required this.latSum,
-    required this.lonSum,
-  }) : center = LatLng(latSum, lonSum);
+    required T item,
+    required double lat,
+    required double lon,
+  })  : items = [item],
+        _latSum = lat,
+        _lonSum = lon,
+        _south = lat,
+        _north = lat,
+        _west = lon,
+        _east = lon;
 
   final List<T> items;
-  double latSum;
-  double lonSum;
-  LatLng center;
+  double _latSum;
+  double _lonSum;
+  double _south;
+  double _north;
+  double _west;
+  double _east;
   late String key;
+
+  void add(T item, double lat, double lon) {
+    items.add(item);
+    _latSum += lat;
+    _lonSum += lon;
+    if (lat < _south) _south = lat;
+    if (lat > _north) _north = lat;
+    if (lon < _west) _west = lon;
+    if (lon > _east) _east = lon;
+  }
+
+  LatLng get center => LatLng(_latSum / items.length, _lonSum / items.length);
+
+  LatLngBounds get bounds =>
+      LatLngBounds(LatLng(_south, _west), LatLng(_north, _east));
+}
+
+class _ClusterCacheEntry {
+  _ClusterCacheEntry({
+    required this.items,
+    required this.zoom,
+    required this.clusters,
+  });
+
+  final List<Object?> items;
+  final int zoom;
+  final List<_Cluster<dynamic>> clusters;
 }
