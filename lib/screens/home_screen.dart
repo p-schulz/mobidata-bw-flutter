@@ -71,11 +71,12 @@ class _HomeScreenState extends State<HomeScreen> {
   static const _prefsKeyOpenDrawerOnStart = 'settings_openDrawerOnStart';
   static const _prefsKeyDrawerHintShown = 'drawerHintShown';
   static const _prefsKeyStartCategory = 'settings_startCategory';
-  static const _mapTilerDarkStyleUrl =
-      'https://api.maptiler.com/maps/019afd4d-fbe5-7cac-8323-95d9d36fb0b6/style.json?key=SZ126UUkd7H8XInPDl85';
-  static const _mapTilerBrightStyleUrl =
-      'https://api.maptiler.com/maps/019aff26-34a2-7517-ad3d-0e299d8411f1/style.json?key=SZ126UUkd7H8XInPDl85';
-  //'https://api.maptiler.com/maps/bright-v2/style.json?key=SZ126UUkd7H8XInPDl85';
+  // Map styles (Mapbox style spec) are generated and served by the backend
+  // (deploy/styles/generate_styles.py), so palettes can change without an app
+  // release. The tiles themselves come from the backend's PMTiles server.
+  static const _mapStyleBaseUrl = 'http://85.215.128.121/styles';
+  static const _darkMapStyleUrl = '$_mapStyleBaseUrl/dark.json';
+  static const _lightMapStyleUrl = '$_mapStyleBaseUrl/light.json';
 
   // controllers + services
   final MapController _mapController = MapController();
@@ -213,8 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
         isDarkMode ? _darkMapStyleFuture : _lightMapStyleFuture;
     if (cachedFuture != null) return cachedFuture;
 
-    final styleUrl =
-        isDarkMode ? _mapTilerDarkStyleUrl : _mapTilerBrightStyleUrl;
+    final styleUrl = isDarkMode ? _darkMapStyleUrl : _lightMapStyleUrl;
     final future =
         StyleReader(uri: styleUrl).read().catchError((error, stackTrace) {
       if (isDarkMode) {
