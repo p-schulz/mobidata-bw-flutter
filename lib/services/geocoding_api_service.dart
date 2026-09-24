@@ -1,25 +1,23 @@
 import 'package:dio/dio.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../config/backend_config.dart';
+
 class GeocodingApiService {
   GeocodingApiService()
       : _dio = Dio(
           BaseOptions(
-            baseUrl: _baseUrl,
+            baseUrl: BackendConfig.apiBaseUrl,
             connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 20),
             headers: const {
               'Accept': 'application/json',
-              'x-api-key': _apiKey,
+              'x-api-key': BackendConfig.apiKey,
             },
           ),
         );
 
   final Dio _dio;
-
-  static const _baseUrl = 'http://85.215.128.121:8080';
-  static const _apiKey =
-      'a9f88d7fe78f3e1dcdecc6e22c818c43f4d71fe549d4a28aac2d7892c8be6a2e';
 
   Future<LatLng?> geocode(String query) async {
     final trimmed = query.trim();

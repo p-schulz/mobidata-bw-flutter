@@ -70,7 +70,7 @@ class ImpressumSheet extends StatelessWidget {
                     showLicensePage(
                       context: context,
                       applicationName: 'Mobility4BW',
-                      applicationVersion: '1.0.0',
+                      applicationVersion: '1.0.1',
                     );
                   },
                   icon: const Icon(Icons.article_outlined),

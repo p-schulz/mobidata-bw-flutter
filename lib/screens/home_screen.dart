@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:vector_map_tiles/vector_map_tiles.dart';
 //import 'package:webview_flutter/webview_flutter.dart'; // Import the web view
 
+import '../config/backend_config.dart';
 import '../services/bicycle_network_service.dart';
 import '../services/charging_api_service.dart';
 import '../services/construction_api_service.dart';
@@ -74,9 +75,10 @@ class _HomeScreenState extends State<HomeScreen> {
   // Map styles (Mapbox style spec) are generated and served by the backend
   // (deploy/styles/generate_styles.py), so palettes can change without an app
   // release. The tiles themselves come from the backend's PMTiles server.
-  static const _mapStyleBaseUrl = 'http://85.215.128.121/styles';
-  static const _darkMapStyleUrl = '$_mapStyleBaseUrl/dark.json';
-  static const _lightMapStyleUrl = '$_mapStyleBaseUrl/light.json';
+  static String get _darkMapStyleUrl =>
+      '${BackendConfig.stylesBaseUrl}/dark.json';
+  static String get _lightMapStyleUrl =>
+      '${BackendConfig.stylesBaseUrl}/light.json';
 
   // controllers + services
   final MapController _mapController = MapController();
@@ -2945,16 +2947,17 @@ class _HomeScreenState extends State<HomeScreen> {
       return DatasetCategory.parking;
     }
     for (final category in DatasetCategory.values) {
-      if (category.name == raw) {
+      if (category.name == raw && _categoryTitles().containsKey(category)) {
         return category;
       }
     }
     return DatasetCategory.parking;
   }
 
-  Map<DatasetCategory, String> _categoryTitles() => const {
+  Map<DatasetCategory, String> _categoryTitles() => {
         DatasetCategory.transit: 'ÖPNV',
-        DatasetCategory.bicycleNetwork: 'Radnetz',
+        if (BackendConfig.bicycleNetworkSupported)
+          DatasetCategory.bicycleNetwork: 'Radnetz',
         DatasetCategory.bikesharing: 'Bike-Sharing',
         DatasetCategory.scooters: 'Scooter-Sharing',
         DatasetCategory.carsharing: 'Car-Sharing',
